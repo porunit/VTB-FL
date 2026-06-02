@@ -1,0 +1,10 @@
+# Секреты — НИКОГДА не коммитить
+.env
+service-account*.json
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
