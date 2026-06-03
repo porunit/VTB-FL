@@ -3,3 +3,9 @@ uvicorn[standard]==0.34.0
 google-api-python-client==2.157.0
 google-auth==2.37.0
 tzdata==2024.2
+
+# Этап 0: БД и миграция
+SQLAlchemy==2.0.50
+alembic==1.18.4
+psycopg2-binary==2.9.10   # драйвер Postgres (прод)
+openpyxl==3.1.5           # чтение .xlsx для оффлайн-миграции
