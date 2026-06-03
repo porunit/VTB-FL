@@ -1,0 +1,6 @@
+# Caddy получает и продлевает HTTPS-сертификат сам (Let's Encrypt).
+# {$DOMAIN} берётся из переменной окружения (см. docker-compose.yml / .env).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8080
+}

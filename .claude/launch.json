@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "dashboard",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5757"],
-      "port": 5757
+      "runtimeExecutable": "C:\\programming\\VTB-FL\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["C:\\programming\\VTB-FL\\backend\\app.py"],
+      "port": 8080
     }
   ]
 }

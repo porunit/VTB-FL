@@ -25,8 +25,14 @@ _SHEETS_EPOCH = datetime(1899, 12, 30)
 
 def _credentials():
     """Service-account creds. Путь к JSON-ключу — в GOOGLE_APPLICATION_CREDENTIALS
-    или SERVICE_ACCOUNT_FILE; иначе ADC (например, на Cloud Run)."""
+    или SERVICE_ACCOUNT_FILE; иначе ADC (например, на Cloud Run).
+    Относительный путь разрешается относительно папки backend (не текущей CWD)."""
     path = os.environ.get('SERVICE_ACCOUNT_FILE') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+    if path and not os.path.isabs(path):
+        here = os.path.dirname(os.path.abspath(__file__))
+        cand = os.path.join(here, path)
+        if os.path.exists(cand):
+            path = cand
     if path and os.path.exists(path):
         return service_account.Credentials.from_service_account_file(path, scopes=SCOPES)
     # ADC: на Cloud Run сработает привязанный к сервису аккаунт.
