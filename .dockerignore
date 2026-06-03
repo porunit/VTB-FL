@@ -1,0 +1,8 @@
+# Секреты и мусор НЕ должны попадать в Docker-образ
+backend/service-account.json
+backend/.env
+backend/.venv
+**/__pycache__
+**/*.pyc
+.git
+.claude

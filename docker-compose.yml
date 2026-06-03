@@ -1,0 +1,44 @@
+# Деплой на VPS (Vultr и любой другой) через Docker.
+# app (FastAPI + дашборд) за Caddy с автоматическим бесплатным HTTPS.
+#
+# Нужен домен, A-записью указывающий на IP сервера. Значения — в .env рядом
+# с этим файлом (см. .env.deploy.example): DOMAIN, DASH_USER, DASH_PASS.
+#
+# Запуск:  docker compose up -d --build
+# Логи:    docker compose logs -f
+# Стоп:    docker compose down
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVICE_ACCOUNT_FILE: /sa.json
+      DASH_USER: ${DASH_USER:-}
+      DASH_PASS: ${DASH_PASS:-}
+      CACHE_TTL: ${CACHE_TTL:-45}
+    volumes:
+      # Ключ service-аккаунта монтируется в рантайме, в образ НЕ попадает.
+      - ./backend/service-account.json:/sa.json:ro
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
