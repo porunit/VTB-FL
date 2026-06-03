@@ -1,0 +1,4 @@
+# Шелл-скрипты и YAML всегда с LF — иначе на Linux-сервере bash спотыкается о \r.
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf

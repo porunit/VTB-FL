@@ -1,0 +1,42 @@
+name: Deploy to Vultr
+
+# Автодеплой при попадании кода в main (т.е. после мержа PR).
+# Также можно запустить вручную из вкладки Actions (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'DEPLOY.md'
+      - 'Code.gs'
+      - '.github/**'
+  workflow_dispatch:
+
+# Не запускать два деплоя одновременно (второй дождётся первого).
+concurrency:
+  group: deploy-vultr
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VULTR_HOST }}
+          username: ${{ secrets.VULTR_USER }}
+          key: ${{ secrets.VULTR_SSH_KEY }}
+          port: ${{ secrets.VULTR_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/VTB-FL
+            echo "→ Подтягиваю свежий main…"
+            git fetch --all --prune
+            git reset --hard origin/main
+            echo "→ Пересобираю и поднимаю контейнеры…"
+            docker compose up -d --build
+            echo "→ Чищу старые образы…"
+            docker image prune -f
+            echo "→ Готово. Статус:"
+            docker compose ps
