@@ -40,11 +40,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 import parser as model_parser
-import sheet
+# sheet (Google API) импортируется лениво только в режиме MODEL_SOURCE=sheet —
+# БД-деплою Google-библиотеки и креды не нужны.
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX_HTML = os.path.join(ROOT, 'index.html')
+ENTRY_HTML = os.path.join(ROOT, 'entry.html')
 CACHE_TTL = int(os.environ.get('CACHE_TTL', '45'))
+
+# Источник модели дашборда: 'sheet' (Google-таблица, по умолчанию) или 'db' (Postgres).
+# Переключение без правки фронта — формат /api/model одинаковый.
+MODEL_SOURCE = os.environ.get('MODEL_SOURCE', 'sheet').strip().lower()
 
 app = FastAPI(title='Контроль задолженности · аренда авто')
 
@@ -60,8 +66,18 @@ def get_model():
             return _cache['data']
     # Тяжёлое чтение — вне локана, чтобы не блокировать всех зрителей.
     try:
-        rows, formulas, tz = sheet.fetch_grid()
-        data = model_parser.build_model(rows, formulas, tz)
+        if MODEL_SOURCE == 'db':
+            import db_model
+            from db import get_session
+            session = get_session()
+            try:
+                data = db_model.build_model_from_db(session)
+            finally:
+                session.close()
+        else:
+            import sheet
+            rows, formulas, tz = sheet.fetch_grid()
+            data = model_parser.build_model(rows, formulas, tz)
     except Exception as err:  # noqa: BLE001
         import traceback
         return {'error': str(err), 'stack': traceback.format_exc()}
@@ -97,6 +113,11 @@ def index(_=Depends(auth)):
     return FileResponse(INDEX_HTML, media_type='text/html; charset=utf-8')
 
 
+@app.get('/entry')
+def entry(_=Depends(auth)):
+    return FileResponse(ENTRY_HTML, media_type='text/html; charset=utf-8')
+
+
 @app.get('/api/model')
 def api_model(_=Depends(auth)):
     data = get_model()
@@ -106,6 +127,13 @@ def api_model(_=Depends(auth)):
 @app.get('/healthz')
 def healthz():
     return {'ok': True}
+
+
+# ---- API оператора (этап 1) — под той же защитой, что и дашборд ----------
+# Подключается, только если задан DATABASE_URL (иначе вводить деньги некуда).
+if os.environ.get('DATABASE_URL'):
+    import operator_api
+    app.include_router(operator_api.router, dependencies=[Depends(auth)])
 
 
 if __name__ == '__main__':

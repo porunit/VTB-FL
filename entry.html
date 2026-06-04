@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ввод платежей · аренда авто</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#1c2530; --muted:#6b7785; --line:#e6e9ee;
+    --neg:#c0392b; --negbg:#fdecea; --pos:#1e8449; --posbg:#eafaf1;
+    --accent:#2563eb; --accentbg:#eef3ff; --warn:#b9770e; --warnbg:#fef6e7;
+    --num:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  .num{font-variant-numeric:tabular-nums}
+  header{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;padding:10px 16px}
+  h1{font-size:16px;margin:0;font-weight:650}
+  .spacer{flex:1}
+  a.link{color:var(--accent);text-decoration:none;font-size:13px}
+  .app{display:flex;height:calc(100vh - 53px)}
+
+  /* sidebar */
+  .side{width:320px;flex:none;border-right:1px solid var(--line);background:#fff;display:flex;flex-direction:column}
+  .search{padding:10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+  .search input{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px}
+  .dlist{overflow:auto;flex:1}
+  .drv{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid #f1f3f6}
+  .drv:hover{background:#f7f9fc}
+  .drv.active{background:var(--accentbg);box-shadow:inset 3px 0 0 var(--accent)}
+  .ava{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;
+    background:#eef1f5;color:#586677;border:2px solid transparent}
+  .drv.debt .ava{border-color:var(--neg);color:var(--neg);background:var(--negbg)}
+  .drv .info{flex:1;min-width:0}
+  .drv .nm{font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drv .car{color:var(--muted);font-size:12px}
+  .chip{font-size:12.5px;font-weight:650;white-space:nowrap}
+  .chip.neg{color:var(--neg)} .chip.pos{color:var(--pos)}
+
+  /* detail */
+  .main{flex:1;overflow:auto;padding:18px 22px}
+  .ph{display:grid;place-items:center;height:100%;color:var(--muted)}
+  .dhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .dhead .nm{font-size:20px;font-weight:700}
+  .dhead .car{color:var(--muted)}
+  .hctrl{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .dhead select{border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;background:#fff;cursor:pointer}
+  .ghost{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 13px;font-size:14px;cursor:pointer;color:var(--ink)}
+  .ghost:hover{background:#f3f5f8}
+  .badge{display:inline-block;background:var(--warnbg);color:var(--warn);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 14px}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  .kpi .v{font-size:19px;font-weight:700;margin-top:2px}
+  .kpi.bal .v.neg{color:var(--neg)} .kpi.bal .v.pos{color:var(--pos)}
+
+  /* quick entry */
+  .quick{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:16px;flex-wrap:wrap}
+  .quick input[type=number]{flex:1;min-width:140px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:16px;font-variant-numeric:tabular-nums}
+  .quick input[type=date]{border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:14px}
+  .quick button{border:0;background:var(--accent);color:#fff;border-radius:9px;padding:11px 18px;font-size:15px;font-weight:650;cursor:pointer}
+  .quick button:active{transform:scale(.98)}
+  .quick .qerr{flex-basis:100%;color:var(--neg);font-size:12px;min-height:0}
+
+  /* calendar */
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+  .wd{font-size:12px;color:var(--muted);text-align:center;padding:2px 0;font-weight:600}
+  .day{min-height:74px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 8px;cursor:pointer;
+    display:flex;flex-direction:column;transition:background .12s,box-shadow .12s}
+  .day.blank{background:transparent;border:0;cursor:default}
+  .day:not(.blank):hover{background:var(--accentbg);box-shadow:inset 0 0 0 1px var(--accent)}
+  .day .dn{font-size:12px;color:var(--muted)}
+  .day.today{box-shadow:inset 0 0 0 2px var(--accent)}
+  .day.paid{background:var(--posbg);border-color:#bfe6cf}
+  .day .amt{margin-top:auto;text-align:right;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:#15613a}
+  .day .vmark{margin-top:auto;text-align:right;font-size:11px;color:var(--muted);text-decoration:line-through}
+  .day.flash{animation:flash .8s ease}
+  @keyframes flash{0%{background:#cdeedb}100%{}}
+
+  /* popover */
+  .ov{position:fixed;inset:0;background:rgba(20,28,38,.28);display:none;z-index:50}
+  .ov.show{display:block}
+  .pop{position:absolute;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(20,28,38,.22);width:300px;padding:14px}
+  .pop h3{margin:0 0 2px;font-size:14px}
+  .pop .sub{color:var(--muted);font-size:12px;margin-bottom:10px}
+  .plist{margin:0 0 8px;max-height:150px;overflow:auto}
+  .prow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
+  .prow.void .amt{text-decoration:line-through;color:var(--muted)}
+  .prow .amt{font-variant-numeric:tabular-nums;font-weight:600}
+  .void-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--neg);font-size:12px}
+  .addrow{display:flex;gap:6px;margin-top:6px}
+  .addrow input{flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:15px}
+  .addrow button{border:0;background:var(--accent);color:#fff;border-radius:8px;padding:9px 13px;cursor:pointer;font-weight:600}
+  .err{color:var(--neg);font-size:12px;margin-top:6px;min-height:14px}
+  /* profile modal */
+  .movl{position:fixed;inset:0;background:rgba(20,28,38,.4);display:none;z-index:55;align-items:flex-start;justify-content:center}
+  .movl.show{display:flex}
+  .modal{background:#fff;border-radius:14px;width:min(440px,92vw);margin-top:6vh;max-height:86vh;overflow:auto;box-shadow:0 18px 60px rgba(20,28,38,.3)}
+  .modal .mh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+  .modal .mh h2{font-size:17px;margin:0}
+  .modal .x{border:0;background:#f1f3f6;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:16px;color:var(--muted)}
+  .mbody{padding:16px 18px}
+  .fld{margin-bottom:12px}
+  .fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .fld input,.fld textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:14px;font-family:inherit}
+  .fld textarea{resize:vertical;min-height:54px}
+  .park{display:flex;align-items:center;gap:8px;margin:6px 0 14px}
+  .sec-t{font-size:13px;font-weight:650;margin:16px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .note{border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;position:relative}
+  .note .nb{font-size:14px;white-space:pre-wrap}
+  .note .nm2{font-size:11px;color:var(--muted);margin-top:4px}
+  .note .del{position:absolute;top:6px;right:6px;border:0;background:none;color:var(--muted);cursor:pointer;font-size:13px}
+  .saveb{border:0;background:var(--accent);color:#fff;border-radius:9px;padding:10px 16px;font-weight:650;cursor:pointer}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;padding:9px 16px;border-radius:9px;opacity:0;transition:opacity .2s;z-index:60;font-size:13px}
+  .toast.show{opacity:1}
+
+  @media(max-width:760px){
+    .app{flex-direction:column;height:auto}
+    .side{width:100%;max-height:42vh}
+    .kpis{grid-template-columns:repeat(3,1fr)}
+    .day{min-height:58px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ввод платежей</h1>
+  <div class="spacer"></div>
+  <a class="link" href="/">Дашборд →</a>
+</header>
+
+<div class="app">
+  <aside class="side">
+    <div class="search"><input id="q" placeholder="Поиск водителя…" autocomplete="off"></div>
+    <div class="dlist" id="dlist"></div>
+  </aside>
+  <main class="main" id="main"><div class="ph">Выберите водителя слева</div></main>
+</div>
+
+<div class="ov" id="ov"><div class="pop" id="pop"></div></div>
+<div class="movl" id="movl"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+let S={drivers:[],months:[],driverId:null,year:null,month:null,data:null,filter:''};
+
+const fmt=n=>(Math.round(n||0)).toLocaleString('ru-RU');
+const money=n=>n<0?'−'+fmt(Math.abs(n)):fmt(n);
+const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1700)}
+async function api(p,o){const r=await fetch(p,o);if(!r.ok){let d={};try{d=await r.json()}catch(e){}throw new Error(d.detail||('Ошибка '+r.status))}return r.status===204?null:r.json()}
+
+async function init(){
+  const [model,drivers]=await Promise.all([api('/api/model'),api('/api/drivers')]);
+  S.months=(model.months||[]).map(x=>({y:x.year,mo:x.month+1,label:x.label}));
+  const cur=S.months[S.months.length-1]; if(cur){S.year=cur.y;S.month=cur.mo}
+  S.drivers=drivers; renderList();
+  document.getElementById('q').addEventListener('input',e=>{S.filter=e.target.value.toLowerCase();renderList()});
+}
+
+function renderList(){
+  const box=document.getElementById('dlist');
+  const f=S.filter;
+  const items=S.drivers.filter(d=>!f||d.name.toLowerCase().includes(f)||(d.car||'').toLowerCase().includes(f));
+  box.innerHTML=items.map(d=>{
+    const debt=d.balance<-0.5;
+    return `<div class="drv${debt?' debt':''}${d.id===S.driverId?' active':''}" data-id="${d.id}">
+      <div class="ava">${initials(d.name)}</div>
+      <div class="info"><div class="nm">${d.name}</div><div class="car">${d.car||'без номера'}</div></div>
+      <div class="chip ${d.balance<0?'neg':'pos'} num">${money(d.balance)}</div></div>`;
+  }).join('')||'<div style="padding:16px;color:var(--muted)">Никого не найдено</div>';
+  box.querySelectorAll('.drv').forEach(el=>el.onclick=()=>{S.driverId=+el.dataset.id;renderList();loadDetail()});
+}
+
+async function loadDetail(){
+  if(!S.driverId)return;
+  try{
+    S.data=await api(`/api/driver_month?driver_id=${S.driverId}&year=${S.year}&month=${S.month}`);
+    renderDetail();
+  }catch(e){document.getElementById('main').innerHTML=`<div class="ph">${e.message}</div>`}
+}
+
+function todayInMonth(){
+  const t=new Date(); const y=t.getFullYear(),m=t.getMonth()+1;
+  if(y===S.year&&m===S.month) return `${y}-${String(m).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  return `${S.year}-${String(S.month).padStart(2,'0')}-01`;
+}
+function cellPaid(arr){return (arr||[]).filter(p=>!p.voided&&p.source!=='buyout').reduce((s,p)=>s+p.amount,0)}
+
+function renderDetail(){
+  const d=S.data;const m=document.getElementById('main');
+  const monthOpts=S.months.map(x=>`<option value="${x.y}-${x.mo}"${x.y===S.year&&x.mo===S.month?' selected':''}>${x.label} ${x.y}</option>`).join('');
+  if(!d.exists){
+    m.innerHTML=`<div class="dhead"><span class="nm">${d.name||''}</span>
+      <div class="hctrl"><button class="ghost" id="profbtn">Профиль</button><select id="msel">${monthOpts}</select></div></div>
+      <div class="ph" style="height:200px">Нет данных за ${d.label} ${S.year}</div>`;
+    document.getElementById('msel').onchange=onMonth;
+    document.getElementById('profbtn').onclick=openProfile; return;
+  }
+  const dim=d.daysInMonth; const first=(new Date(d.year,d.month-1,1).getDay()+6)%7;
+  const tISO=todayInMonth();
+  let cells='';
+  for(const w of WD) cells+=`<div class="wd">${w}</div>`;
+  for(let i=0;i<first;i++) cells+='<div class="day blank"></div>';
+  for(let day=1;day<=dim;day++){
+    const arr=d.days[String(day)]||[];const paid=cellPaid(arr);
+    const iso=`${d.year}-${String(d.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const isToday=iso===tISO;
+    const voided=arr.some(p=>p.voided)&&!paid;
+    cells+=`<div class="day${paid?' paid':''}${isToday?' today':''}" data-day="${day}">
+      <div class="dn">${day}</div>
+      ${paid?`<div class="amt">${fmt(paid)}</div>`:voided?`<div class="vmark">аннул.</div>`:''}</div>`;
+  }
+  m.innerHTML=`
+    <div class="dhead">
+      <span class="nm">${d.name}</span><span class="car">${d.car||'без номера'}</span>
+      ${d.status==='frozen'?'<span class="badge">заморожен</span>':''}
+      <div class="hctrl"><button class="ghost" id="profbtn">Профиль</button><select id="msel">${monthOpts}</select></div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Обязательство</div><div class="v num">${fmt(d.obligation)} ₽</div></div>
+      <div class="kpi"><div class="l">Внесено</div><div class="v num">${fmt(d.paid)} ₽</div></div>
+      <div class="kpi bal"><div class="l">Остаток</div><div class="v num ${d.balance<0?'neg':'pos'}">${money(d.balance)} ₽</div></div>
+    </div>
+    <div class="quick">
+      <input id="qamt" type="number" inputmode="numeric" placeholder="Сумма ₽" autocomplete="off">
+      <input id="qdate" type="date" value="${tISO}" min="${d.year}-${String(d.month).padStart(2,'0')}-01" max="${d.year}-${String(d.month).padStart(2,'0')}-${String(dim).padStart(2,'0')}">
+      <button id="qadd">Внести</button>
+      <div class="qerr" id="qerr"></div>
+    </div>
+    <div class="cal">${cells}</div>`;
+  document.getElementById('msel').onchange=onMonth;
+  document.getElementById('profbtn').onclick=openProfile;
+  const qamt=document.getElementById('qamt');
+  const quick=async()=>{
+    const v=parseFloat(qamt.value);if(!v){document.getElementById('qerr').textContent='Введите сумму';return}
+    await addPayment(v,document.getElementById('qdate').value);
+  };
+  document.getElementById('qadd').onclick=quick;
+  qamt.onkeydown=e=>{if(e.key==='Enter')quick()};
+  qamt.focus();
+  m.querySelectorAll('.day:not(.blank)').forEach(el=>el.onclick=e=>openDay(+el.dataset.day,el));
+}
+
+function onMonth(e){const [y,mo]=e.target.value.split('-').map(Number);S.year=y;S.month=mo;loadDetail()}
+
+async function addPayment(amount,date,flashDay){
+  try{
+    await api('/api/payments',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rental_month_id:S.data.rental_month_id,amount,paid_at:date})});
+    toast(`+${fmt(amount)} ₽ · ${S.data.name}`);
+    const day=+date.split('-')[2];
+    await refresh(); flash(day);
+  }catch(e){const el=document.getElementById('qerr');if(el)el.textContent=e.message;else alert(e.message)}
+}
+async function refresh(){
+  S.data=await api(`/api/driver_month?driver_id=${S.driverId}&year=${S.year}&month=${S.month}`);
+  // обновим баланс в списке
+  const dr=S.drivers.find(x=>x.id===S.driverId);
+  renderDetail();
+  api('/api/drivers').then(ds=>{S.drivers=ds;renderList()});
+}
+function flash(day){const el=document.querySelector(`.day[data-day="${day}"]`);if(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),800)}}
+
+function openDay(day,el){
+  const d=S.data;const arr=d.days[String(day)]||[];
+  const date=`${d.year}-${String(d.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const pop=document.getElementById('pop');
+  let lst=arr.map(p=>`<div class="prow${p.voided?' void':''}"><span class="amt">${fmt(p.amount)} ₽${p.voided?' (аннул.)':''}</span>${p.voided?'':`<button class="void-btn" data-pid="${p.id}">аннулировать</button>`}</div>`).join('');
+  if(!arr.length)lst='<div class="sub" style="padding:2px 0">платежей нет</div>';
+  pop.innerHTML=`<h3>${d.name} · ${day}.${String(d.month).padStart(2,'0')}.${d.year}</h3><div class="sub">${d.car||''}</div>
+    <div class="plist">${lst}</div>
+    <div class="addrow"><input id="amt" type="number" inputmode="numeric" placeholder="Сумма ₽" autocomplete="off"><button id="add">Внести</button></div>
+    <div class="err" id="err"></div>`;
+  const ov=document.getElementById('ov');ov.classList.add('show');
+  const r=el.getBoundingClientRect();
+  pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-316))+'px';
+  pop.style.top=Math.max(8,Math.min(r.bottom+6,window.innerHeight-250))+'px';
+  const amt=document.getElementById('amt');amt.focus();
+  const submit=async()=>{const v=parseFloat(amt.value);if(!v){document.getElementById('err').textContent='Введите сумму';return}
+    close();await addPayment(v,date)};
+  document.getElementById('add').onclick=submit;
+  amt.onkeydown=e=>{if(e.key==='Enter')submit();if(e.key==='Escape')close()};
+  pop.querySelectorAll('.void-btn').forEach(b=>b.onclick=async()=>{
+    const p=arr.find(x=>x.id==b.dataset.pid);
+    if(!confirm('Аннулировать платёж '+fmt(p.amount)+' ₽?'))return;
+    try{await api(`/api/payments/${b.dataset.pid}/void`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      close();toast('Платёж аннулирован');await refresh();
+    }catch(e){document.getElementById('err').textContent=e.message}
+  });
+}
+function close(){document.getElementById('ov').classList.remove('show')}
+document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();closeProf()}});
+
+// ----- профиль водителя (контакты, контекст, комментарии) -----
+let PROF=null;
+async function openProfile(){
+  if(!S.driverId)return;
+  try{PROF=await api(`/api/drivers/${S.driverId}/profile`);renderProfile();
+    document.getElementById('movl').classList.add('show');
+  }catch(e){alert(e.message)}
+}
+function closeProf(){document.getElementById('movl').classList.remove('show')}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+function renderProfile(){
+  const p=PROF;
+  const notes=p.notes.map(n=>`<div class="note" data-id="${n.id}"><div class="nb">${esc(n.body)}</div>
+    <div class="nm2">${n.author||''} · ${n.created_at?new Date(n.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</div>
+    <button class="del" data-del="${n.id}">✕</button></div>`).join('')||'<div class="sub" style="color:var(--muted)">Пока нет комментариев</div>';
+  document.getElementById('modal').innerHTML=`
+    <div class="mh"><h2>${esc(p.name)}</h2><button class="x" id="px">✕</button></div>
+    <div class="mbody">
+      <div class="sub" style="color:var(--muted);margin-bottom:6px">${p.car||'без номера'} · долг ${money(p.balance)} ₽</div>
+      <div class="fld"><label>Телефон</label><input id="p_phone" value="${esc(p.phone)}" placeholder="+7 …"></div>
+      <div class="fld"><label>Адрес встречи</label><input id="p_addr" value="${esc(p.address)}" placeholder="где забирать деньги"></div>
+      <div class="fld"><label>Контекст / памятка</label><textarea id="p_ctx" placeholder="когда удобно, особенности…">${esc(p.context)}</textarea></div>
+      <label class="park"><input type="checkbox" id="p_park" ${p.in_park?'checked':''}> В парке (на линии)</label>
+      <button class="saveb" id="psave">Сохранить</button>
+      <div class="err" id="perr"></div>
+      <div class="sec-t">Комментарии</div>
+      <div class="fld" style="display:flex;gap:6px"><input id="p_note" placeholder="Добавить комментарий…"><button class="saveb" id="paddnote">+</button></div>
+      <div id="notes">${notes}</div>
+    </div>`;
+  document.getElementById('px').onclick=closeProf;
+  document.getElementById('psave').onclick=saveProfile;
+  const addn=async()=>{
+    const v=document.getElementById('p_note').value.trim();if(!v)return;
+    await api(`/api/drivers/${p.id}/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:v})});
+    PROF=await api(`/api/drivers/${p.id}/profile`);renderProfile();toast('Комментарий добавлен');
+  };
+  document.getElementById('paddnote').onclick=addn;
+  document.getElementById('p_note').onkeydown=e=>{if(e.key==='Enter')addn()};
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('Удалить комментарий?'))return;
+    await api(`/api/notes/${b.dataset.del}`,{method:'DELETE'});
+    PROF=await api(`/api/drivers/${p.id}/profile`);renderProfile();
+  });
+}
+async function saveProfile(){
+  try{
+    await api(`/api/drivers/${PROF.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:document.getElementById('p_phone').value,address:document.getElementById('p_addr').value,
+        context:document.getElementById('p_ctx').value,in_park:document.getElementById('p_park').checked})});
+    toast('Сохранено');closeProf();
+  }catch(e){document.getElementById('perr').textContent=e.message}
+}
+document.getElementById('movl').onclick=e=>{if(e.target.id==='movl')closeProf()};
+
+init();
+</script>
+</body>
+</html>
