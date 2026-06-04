@@ -187,6 +187,73 @@ def void_payment(pid: int, body: VoidIn):
         session.close()
 
 
+@router.get('/drivers')
+def list_drivers():
+    """Список водителей для выбора (id, имя, последняя машина)."""
+    session = get_session()
+    try:
+        rows = session.execute(
+            select(Driver.id, Driver.full_name, Driver.is_active).order_by(Driver.full_name)
+        ).all()
+        # последняя машина по самому позднему месяцу
+        car_rows = session.execute(
+            select(RentalMonth.driver_id, Car.plate, RentalMonth.year, RentalMonth.month)
+            .join(Car, Car.id == RentalMonth.car_id)
+            .order_by(RentalMonth.driver_id, RentalMonth.year.desc(), RentalMonth.month.desc())
+        ).all()
+        car_by_driver = {}
+        for did, plate, _, _ in car_rows:
+            car_by_driver.setdefault(did, plate)
+        return [{'id': i, 'name': n, 'active': a, 'car': car_by_driver.get(i, '')}
+                for i, n, a in rows]
+    finally:
+        session.close()
+
+
+@router.get('/driver_month')
+def driver_month(driver_id: int, year: int, month: int):
+    """Данные одного водителя за месяц: дни с платежами + Итого/Остаток.
+    Для по-водительного ввода (узкая колонка дней)."""
+    if not 1 <= month <= 12:
+        raise HTTPException(422, 'month вне 1..12')
+    session = get_session()
+    try:
+        dim = calendar.monthrange(year, month)[1]
+        row = session.execute(
+            select(RentalMonth, Driver.full_name, Car.plate)
+            .join(Driver, Driver.id == RentalMonth.driver_id)
+            .join(Car, Car.id == RentalMonth.car_id)
+            .where(RentalMonth.driver_id == driver_id,
+                   RentalMonth.year == year, RentalMonth.month == month)
+        ).first()
+        if row is None:
+            name = session.scalar(select(Driver.full_name).where(Driver.id == driver_id))
+            return {'exists': False, 'driver_id': driver_id, 'name': name,
+                    'year': year, 'month': month, 'label': MONTHS_RU[month - 1],
+                    'daysInMonth': dim, 'days': {}}
+        rm, name, plate = row
+        pays = session.execute(
+            select(Payment).where(Payment.rental_month_id == rm.id).order_by(Payment.created_at)
+        ).scalars().all()
+        days = defaultdict(list)
+        for p in pays:
+            days[p.paid_at.day].append({
+                'id': p.id, 'amount': float(p.amount),
+                'voided': p.voided_at is not None, 'source': p.source.value})
+        paid = round(sum(p.amount for p in pays
+                         if p.voided_at is None and p.source != PaymentSource.buyout), 2)
+        return {
+            'exists': True, 'rental_month_id': rm.id, 'driver_id': driver_id, 'name': name,
+            'car': plate, 'daily_rate': float(rm.daily_rate), 'obligation': float(rm.obligation),
+            'paid': float(paid), 'balance': round(float(paid) - float(rm.obligation), 2),
+            'status': rm.status.value, 'reason': rm.reason.value if rm.reason else None,
+            'year': year, 'month': month, 'label': MONTHS_RU[month - 1],
+            'daysInMonth': dim, 'days': {str(d): v for d, v in days.items()},
+        }
+    finally:
+        session.close()
+
+
 @router.get('/month_grid')
 def month_grid(year: int, month: int):
     """Сетка месяца как в исходной таблице: столбцы-водители, строки-дни,

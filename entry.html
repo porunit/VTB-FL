@@ -7,37 +7,43 @@
 <style>
   :root{
     --bg:#f6f7f9; --panel:#fff; --ink:#1c2530; --muted:#6b7785; --line:#e6e9ee;
-    --neg:#c0392b; --negbg:#fdecea; --pos:#1e8449; --posbg:#eafaf1;
-    --accent:#2563eb; --accentbg:#eef3ff; --warn:#b9770e; --warnbg:#fef6e7;
+    --neg:#c0392b; --pos:#1e8449; --accent:#2563eb; --accentbg:#eef3ff; --warn:#b9770e;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
   header{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);
-    display:flex;align-items:center;gap:14px;padding:10px 16px;flex-wrap:wrap}
+    display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap}
   h1{font-size:16px;margin:0;font-weight:650}
-  .months{display:flex;gap:6px;flex-wrap:wrap}
-  .mbtn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 11px;cursor:pointer;color:var(--ink)}
-  .mbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
   .spacer{flex:1}
   a.link{color:var(--accent);text-decoration:none;font-size:13px}
-  .hint{color:var(--muted);font-size:12px}
-  .wrap{padding:12px 16px}
-  .gridbox{overflow:auto;max-height:calc(100vh - 120px);border:1px solid var(--line);border-radius:10px;background:#fff}
-  table{border-collapse:separate;border-spacing:0;font-size:13px;white-space:nowrap}
-  th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 8px;text-align:right}
-  thead th{position:sticky;top:0;background:#fafbfc;z-index:10;font-weight:600}
-  .col-day{position:sticky;left:0;background:#fafbfc;z-index:5;text-align:center;min-width:54px;font-variant-numeric:tabular-nums}
-  thead .col-day{z-index:20}
-  .dname{font-weight:650;text-align:center;min-width:96px;max-width:140px;white-space:normal}
-  .dcar{color:var(--muted);font-weight:400;font-size:11px}
-  .meta td,.meta th{background:#fbfcfd;color:var(--muted);font-size:12px}
-  td.cell{cursor:pointer;font-variant-numeric:tabular-nums;min-width:96px}
-  td.cell:hover{background:var(--accentbg);outline:1px solid var(--accent);outline-offset:-1px}
-  td.cell.has{font-weight:600}
-  tfoot td,tfoot th{position:sticky;bottom:0;background:#f3f5f8;font-weight:650;z-index:8}
-  tfoot .col-day{z-index:18}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 16px}
+  .dsel{display:flex;flex-direction:column;gap:3px}
+  .dsel label{font-size:11px;color:var(--muted)}
+  .dsel input{border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:14px;min-width:240px}
+  .months{display:flex;gap:6px;flex-wrap:wrap}
+  .mbtn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;cursor:pointer;color:var(--ink)}
+  .mbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .wrap{max-width:520px;margin:0 auto;padding:6px 16px 40px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .dhead{padding:14px 16px;border-bottom:1px solid var(--line)}
+  .dhead .nm{font-size:17px;font-weight:700}
+  .dhead .meta{color:var(--muted);font-size:13px;margin-top:3px;display:flex;gap:14px;flex-wrap:wrap}
+  .frozenbadge{display:inline-block;background:#fef6e7;color:var(--warn);border-radius:6px;padding:1px 7px;font-size:12px}
+  .daytable{width:100%;border-collapse:collapse}
+  .daytable td{border-top:1px solid var(--line);padding:0}
+  .drow{display:flex;align-items:center;cursor:pointer}
+  .drow:hover{background:var(--accentbg)}
+  .dnum{width:46px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;padding:9px 0;border-right:1px solid var(--line)}
+  .dval{flex:1;padding:9px 14px;font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+  .drow.empty .dval{color:#c4cdd6;font-weight:400}
+  .drow.empty .dval::after{content:'+ внести'}
+  .dval .void{color:var(--muted);text-decoration:line-through;font-weight:400;margin-left:6px;font-size:12px}
+  .totbar{display:flex;justify-content:space-between;padding:14px 16px;border-top:2px solid var(--line);background:#fbfcfd}
+  .tot{display:flex;flex-direction:column}
+  .tot .l{font-size:12px;color:var(--muted)}
+  .tot .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
   .neg{color:var(--neg)} .pos{color:var(--pos)}
-  .frozen{box-shadow:inset 0 0 0 2px var(--warn)}
+  .empty-state{padding:40px 16px;text-align:center;color:var(--muted)}
   /* popover */
   .ov{position:fixed;inset:0;background:rgba(20,28,38,.28);display:none;z-index:50}
   .ov.show{display:block}
@@ -45,14 +51,13 @@
     box-shadow:0 12px 40px rgba(20,28,38,.22);width:300px;padding:14px}
   .pop h3{margin:0 0 2px;font-size:14px}
   .pop .sub{color:var(--muted);font-size:12px;margin-bottom:10px}
-  .plist{margin:0 0 10px;max-height:150px;overflow:auto}
+  .plist{margin:0 0 6px;max-height:150px;overflow:auto}
   .prow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--line)}
-  .prow .amt{font-variant-numeric:tabular-nums}
   .prow.void .amt{text-decoration:line-through;color:var(--muted)}
   .void-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:2px 7px;cursor:pointer;color:var(--neg);font-size:12px}
-  .addrow{display:flex;gap:6px;margin-top:6px}
-  .addrow input{flex:1;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:14px}
-  .addrow button{border:0;background:var(--accent);color:#fff;border-radius:7px;padding:7px 12px;cursor:pointer;font-weight:600}
+  .addrow{display:flex;gap:6px;margin-top:8px}
+  .addrow input{flex:1;border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:15px}
+  .addrow button{border:0;background:var(--accent);color:#fff;border-radius:7px;padding:8px 13px;cursor:pointer;font-weight:600}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;
     padding:9px 16px;border-radius:9px;opacity:0;transition:opacity .2s;z-index:60;font-size:13px}
   .toast.show{opacity:1}
@@ -62,26 +67,34 @@
 <body>
 <header>
   <h1>Ввод платежей</h1>
-  <div class="months" id="months"></div>
   <div class="spacer"></div>
-  <span class="hint" id="status"></span>
   <a class="link" href="/">← Дашборд</a>
 </header>
 
+<div class="controls">
+  <div class="dsel">
+    <label>Водитель</label>
+    <input id="driver" list="drivers" placeholder="Начните вводить фамилию…" autocomplete="off">
+    <datalist id="drivers"></datalist>
+  </div>
+  <div class="dsel">
+    <label>Месяц</label>
+    <div class="months" id="months"></div>
+  </div>
+</div>
+
 <div class="wrap">
-  <div class="gridbox"><table id="grid"></table></div>
-  <p class="hint">Клик по ячейке (день × водитель) — добавить или аннулировать платёж. Журнал только дописывается: ошибочный платёж аннулируется, не затирается.</p>
+  <div id="view"></div>
 </div>
 
 <div class="ov" id="ov"><div class="pop" id="pop"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-const MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-let state={year:null,month:null,grid:null};
+let state={drivers:[],months:[],driverId:null,year:null,month:null,data:null};
 
-function fmt(n){return (n||0).toLocaleString('ru-RU')}
-function money(n){const s=fmt(Math.round(n));return n<0?`−${fmt(Math.abs(Math.round(n)))}`:s}
+const fmt=n=>(Math.round(n||0)).toLocaleString('ru-RU');
+const money=n=>n<0?'−'+fmt(Math.abs(n)):fmt(n);
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 
 async function api(path,opts){
@@ -90,78 +103,82 @@ async function api(path,opts){
   return r.status===204?null:r.json();
 }
 
-async function loadMonths(){
-  const m=await api('/api/model');
-  // months: {year, month(0-based), label}
-  const months=(m.months||[]).map(x=>({y:x.year,mo:x.month+1,label:x.label}));
+async function init(){
+  const [model,drivers]=await Promise.all([api('/api/model'),api('/api/drivers')]);
+  state.months=(model.months||[]).map(x=>({y:x.year,mo:x.month+1,label:x.label}));
+  state.drivers=drivers;
+  const dl=document.getElementById('drivers');
+  dl.innerHTML=drivers.map(d=>`<option value="${d.name}${d.car?' · '+d.car:''}" data-id="${d.id}">`).join('');
   const box=document.getElementById('months');box.innerHTML='';
-  months.forEach(mm=>{
-    const b=document.createElement('button');b.className='mbtn';b.textContent=mm.label;
-    b.onclick=()=>selectMonth(mm.y,mm.mo);box.appendChild(b);b.dataset.key=mm.y+'-'+mm.mo;
+  state.months.forEach(m=>{
+    const b=document.createElement('button');b.className='mbtn';b.textContent=m.label;b.dataset.key=m.y+'-'+m.mo;
+    b.onclick=()=>{state.year=m.y;state.month=m.mo;syncMonthBtns();load()};box.appendChild(b);
   });
-  // выбрать текущий (последний)
-  const cur=months[months.length-1];
-  if(cur) selectMonth(cur.y,cur.mo);
+  const cur=state.months[state.months.length-1];
+  if(cur){state.year=cur.y;state.month=cur.mo;syncMonthBtns()}
+  document.getElementById('driver').addEventListener('input',onDriverInput);
+}
+function syncMonthBtns(){document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('active',b.dataset.key===state.year+'-'+state.month))}
+
+function onDriverInput(e){
+  const val=e.target.value;
+  // сопоставляем по тексту опции (имя · авто)
+  const d=state.drivers.find(x=>(x.name+(x.car?' · '+x.car:''))===val) || state.drivers.find(x=>x.name===val);
+  if(d){state.driverId=d.id;load()}
 }
 
-function selectMonth(y,mo){
-  state.year=y;state.month=mo;
-  document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('active',b.dataset.key===y+'-'+mo));
-  loadGrid();
-}
-
-async function loadGrid(){
-  document.getElementById('status').textContent='загрузка…';
+async function load(){
+  if(!state.driverId||!state.year){document.getElementById('view').innerHTML='<div class="empty-state">Выберите водителя и месяц</div>';return}
   try{
-    state.grid=await api(`/api/month_grid?year=${state.year}&month=${state.month}`);
+    state.data=await api(`/api/driver_month?driver_id=${state.driverId}&year=${state.year}&month=${state.month}`);
     render();
-    document.getElementById('status').textContent='';
-  }catch(e){document.getElementById('status').textContent=e.message}
+  }catch(e){document.getElementById('view').innerHTML=`<div class="empty-state">${e.message}</div>`}
 }
 
-function cellPaid(d){return (d||[]).filter(p=>!p.voided&&p.source!=='buyout').reduce((s,p)=>s+p.amount,0)}
+function cellPaid(arr){return (arr||[]).filter(p=>!p.voided&&p.source!=='buyout').reduce((s,p)=>s+p.amount,0)}
 
 function render(){
-  const g=state.grid;const drv=g.drivers;
-  const t=document.getElementById('grid');
-  let h='<thead>';
-  h+='<tr><th class="col-day">'+g.label+'</th>'+drv.map(d=>`<th class="dname${d.status==='frozen'?' frozen':''}">${d.name}<div class="dcar">${d.car||''}</div></th>`).join('')+'</tr>';
-  h+='<tr class="meta"><th class="col-day">сутки</th>'+drv.map(d=>`<td>${d.daily_rate?fmt(d.daily_rate):''}</td>`).join('')+'</tr>';
-  h+='<tr class="meta"><th class="col-day">мес.</th>'+drv.map(d=>`<td>${fmt(d.obligation)}</td>`).join('')+'</tr>';
-  h+='</thead><tbody>';
-  for(let day=1;day<=g.daysInMonth;day++){
-    h+=`<tr><td class="col-day">${day}</td>`;
-    h+=drv.map((d,ci)=>{
-      const arr=d.days[String(day)]||[];const v=cellPaid(arr);
-      const cls='cell'+(v?' has':'')+(arr.some(p=>p.voided)&&!v?' ':'');
-      return `<td class="${cls}" data-ci="${ci}" data-day="${day}">${v?fmt(v):''}</td>`;
-    }).join('');
-    h+='</tr>';
+  const d=state.data;const v=document.getElementById('view');
+  if(!d.exists){
+    v.innerHTML=`<div class="card"><div class="dhead"><div class="nm">${d.name||''}</div>
+      <div class="meta">Нет данных за ${d.label}</div></div></div>`;return;
   }
-  h+='</tbody><tfoot>';
-  h+='<tr><th class="col-day">Итого</th>'+drv.map(d=>`<td>${fmt(d.paid)}</td>`).join('')+'</tr>';
-  h+='<tr><th class="col-day">Остаток</th>'+drv.map(d=>`<td class="${d.balance<0?'neg':'pos'}">${money(d.balance)}</td>`).join('')+'</tr>';
-  h+='</tfoot>';
-  t.innerHTML=h;
-  t.querySelectorAll('td.cell').forEach(td=>td.onclick=e=>openCell(+td.dataset.ci,+td.dataset.day,e));
+  let rows='';
+  for(let day=1;day<=d.daysInMonth;day++){
+    const arr=d.days[String(day)]||[];const paid=cellPaid(arr);
+    const voidTxt=arr.some(p=>p.voided)&&!paid?`<span class="void">аннулир.</span>`:'';
+    rows+=`<tr><td><div class="drow ${paid?'':'empty'}" data-day="${day}">
+      <div class="dnum">${day}</div><div class="dval">${paid?fmt(paid):''}${voidTxt}</div></div></td></tr>`;
+  }
+  v.innerHTML=`<div class="card">
+    <div class="dhead">
+      <div class="nm">${d.name} ${d.status==='frozen'?'<span class="frozenbadge">заморожен</span>':''}</div>
+      <div class="meta"><span>${d.car||'без номера'}</span><span>ставка ${fmt(d.daily_rate)}/сут</span><span>обязат. ${fmt(d.obligation)}/мес</span></div>
+    </div>
+    <table class="daytable"><tbody>${rows}</tbody></table>
+    <div class="totbar">
+      <div class="tot"><span class="l">Итого внесено</span><span class="v">${fmt(d.paid)} ₽</span></div>
+      <div class="tot" style="text-align:right"><span class="l">Остаток</span><span class="v ${d.balance<0?'neg':'pos'}">${money(d.balance)} ₽</span></div>
+    </div>
+  </div>`;
+  v.querySelectorAll('.drow').forEach(r=>r.onclick=e=>openDay(+r.dataset.day,r));
 }
 
-function openCell(ci,day,ev){
-  const d=state.grid.drivers[ci];
-  const arr=(d.days[String(day)]||[]);
-  const date=`${state.year}-${String(state.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+function openDay(day,rowEl){
+  const d=state.data;const arr=d.days[String(day)]||[];
+  const date=`${d.year}-${String(d.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   const pop=document.getElementById('pop');
   let lst=arr.map(p=>`<div class="prow${p.voided?' void':''}"><span class="amt">${fmt(p.amount)} ₽${p.voided?' (аннулир.)':''}</span>${p.voided?'':`<button class="void-btn" data-pid="${p.id}">аннулировать</button>`}</div>`).join('');
-  if(!arr.length) lst='<div class="hint" style="padding:4px 0">платежей нет</div>';
-  pop.innerHTML=`<h3>${d.name}</h3><div class="sub">${d.car||''} · ${day}.${String(state.month).padStart(2,'0')}.${state.year}</div>
+  if(!arr.length) lst='<div class="sub" style="padding:2px 0">платежей нет</div>';
+  pop.innerHTML=`<h3>${d.name} · ${day}.${String(d.month).padStart(2,'0')}.${d.year}</h3>
+    <div class="sub">${d.car||''}</div>
     <div class="plist">${lst}</div>
     <div class="addrow"><input id="amt" type="number" inputmode="numeric" placeholder="Сумма ₽" autocomplete="off"><button id="add">Внести</button></div>
     <div class="err" id="err"></div>`;
-  // позиционирование
   const ov=document.getElementById('ov');ov.classList.add('show');
-  const r=ev.target.getBoundingClientRect();
-  let x=Math.min(r.left,window.innerWidth-320),y=Math.min(r.bottom+6,window.innerHeight-230);
-  pop.style.left=Math.max(8,x)+'px';pop.style.top=Math.max(8,y)+'px';
+  const r=rowEl.getBoundingClientRect();
+  pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-316))+'px';
+  pop.style.top=Math.max(8,Math.min(r.bottom+6,window.innerHeight-240))+'px';
   const amt=document.getElementById('amt');amt.focus();
   const submit=async()=>{
     const val=parseFloat(amt.value);
@@ -169,15 +186,16 @@ function openCell(ci,day,ev){
     try{
       await api('/api/payments',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({rental_month_id:d.rental_month_id,amount:val,paid_at:date})});
-      close();toast(`+${fmt(val)} ₽ · ${d.name}`);await loadGrid();
+      close();toast(`+${fmt(val)} ₽`);await load();
     }catch(e){document.getElementById('err').textContent=e.message}
   };
   document.getElementById('add').onclick=submit;
   amt.onkeydown=e=>{if(e.key==='Enter')submit();if(e.key==='Escape')close()};
   pop.querySelectorAll('.void-btn').forEach(b=>b.onclick=async()=>{
-    if(!confirm('Аннулировать платёж '+fmt(arr.find(p=>p.id==b.dataset.pid).amount)+' ₽?'))return;
+    const p=arr.find(x=>x.id==b.dataset.pid);
+    if(!confirm('Аннулировать платёж '+fmt(p.amount)+' ₽?'))return;
     try{await api(`/api/payments/${b.dataset.pid}/void`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      close();toast('Платёж аннулирован');await loadGrid();
+      close();toast('Платёж аннулирован');await load();
     }catch(e){document.getElementById('err').textContent=e.message}
   });
 }
@@ -185,7 +203,7 @@ function close(){document.getElementById('ov').classList.remove('show')}
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
 
-loadMonths();
+init();
 </script>
 </body>
 </html>
