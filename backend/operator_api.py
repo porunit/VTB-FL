@@ -189,7 +189,8 @@ def void_payment(pid: int, body: VoidIn):
 
 @router.get('/drivers')
 def list_drivers():
-    """Список водителей для выбора (id, имя, последняя машина)."""
+    """Список водителей для выбора: id, имя, последняя машина, общий баланс
+    (Σ платежей − Σ обязательств по всем месяцам; <0 = долг). Для сайдбара."""
     session = get_session()
     try:
         rows = session.execute(
@@ -197,15 +198,27 @@ def list_drivers():
         ).all()
         # последняя машина по самому позднему месяцу
         car_rows = session.execute(
-            select(RentalMonth.driver_id, Car.plate, RentalMonth.year, RentalMonth.month)
+            select(RentalMonth.driver_id, Car.plate)
             .join(Car, Car.id == RentalMonth.car_id)
             .order_by(RentalMonth.driver_id, RentalMonth.year.desc(), RentalMonth.month.desc())
         ).all()
         car_by_driver = {}
-        for did, plate, _, _ in car_rows:
+        for did, plate in car_rows:
             car_by_driver.setdefault(did, plate)
-        return [{'id': i, 'name': n, 'active': a, 'car': car_by_driver.get(i, '')}
-                for i, n, a in rows]
+        # обязательства по водителю
+        obl = dict(session.execute(
+            select(RentalMonth.driver_id, func.coalesce(func.sum(RentalMonth.obligation), 0))
+            .group_by(RentalMonth.driver_id)).all())
+        # оплачено по водителю (без аннулир. и без выкупа)
+        paid = dict(session.execute(
+            select(RentalMonth.driver_id, func.coalesce(func.sum(Payment.amount), 0))
+            .join(Payment, Payment.rental_month_id == RentalMonth.id)
+            .where(Payment.voided_at.is_(None), Payment.source != PaymentSource.buyout)
+            .group_by(RentalMonth.driver_id)).all())
+        return [{
+            'id': i, 'name': n, 'active': a, 'car': car_by_driver.get(i, ''),
+            'balance': round(float(paid.get(i, 0)) - float(obl.get(i, 0)), 2),
+        } for i, n, a in rows]
     finally:
         session.close()
 

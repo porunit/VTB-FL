@@ -7,195 +7,261 @@
 <style>
   :root{
     --bg:#f6f7f9; --panel:#fff; --ink:#1c2530; --muted:#6b7785; --line:#e6e9ee;
-    --neg:#c0392b; --pos:#1e8449; --accent:#2563eb; --accentbg:#eef3ff; --warn:#b9770e;
+    --neg:#c0392b; --negbg:#fdecea; --pos:#1e8449; --posbg:#eafaf1;
+    --accent:#2563eb; --accentbg:#eef3ff; --warn:#b9770e; --warnbg:#fef6e7;
+    --num:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  .num{font-variant-numeric:tabular-nums}
   header{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);
-    display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap}
+    display:flex;align-items:center;gap:12px;padding:10px 16px}
   h1{font-size:16px;margin:0;font-weight:650}
   .spacer{flex:1}
   a.link{color:var(--accent);text-decoration:none;font-size:13px}
-  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 16px}
-  .dsel{display:flex;flex-direction:column;gap:3px}
-  .dsel label{font-size:11px;color:var(--muted)}
-  .dsel input{border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:14px;min-width:240px}
-  .months{display:flex;gap:6px;flex-wrap:wrap}
-  .mbtn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;cursor:pointer;color:var(--ink)}
-  .mbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-  .wrap{max-width:520px;margin:0 auto;padding:6px 16px 40px}
-  .card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .dhead{padding:14px 16px;border-bottom:1px solid var(--line)}
-  .dhead .nm{font-size:17px;font-weight:700}
-  .dhead .meta{color:var(--muted);font-size:13px;margin-top:3px;display:flex;gap:14px;flex-wrap:wrap}
-  .frozenbadge{display:inline-block;background:#fef6e7;color:var(--warn);border-radius:6px;padding:1px 7px;font-size:12px}
-  .daytable{width:100%;border-collapse:collapse}
-  .daytable td{border-top:1px solid var(--line);padding:0}
-  .drow{display:flex;align-items:center;cursor:pointer}
-  .drow:hover{background:var(--accentbg)}
-  .dnum{width:46px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;padding:9px 0;border-right:1px solid var(--line)}
-  .dval{flex:1;padding:9px 14px;font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
-  .drow.empty .dval{color:#c4cdd6;font-weight:400}
-  .drow.empty .dval::after{content:'+ внести'}
-  .dval .void{color:var(--muted);text-decoration:line-through;font-weight:400;margin-left:6px;font-size:12px}
-  .totbar{display:flex;justify-content:space-between;padding:14px 16px;border-top:2px solid var(--line);background:#fbfcfd}
-  .tot{display:flex;flex-direction:column}
-  .tot .l{font-size:12px;color:var(--muted)}
-  .tot .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
-  .neg{color:var(--neg)} .pos{color:var(--pos)}
-  .empty-state{padding:40px 16px;text-align:center;color:var(--muted)}
+  .app{display:flex;height:calc(100vh - 53px)}
+
+  /* sidebar */
+  .side{width:320px;flex:none;border-right:1px solid var(--line);background:#fff;display:flex;flex-direction:column}
+  .search{padding:10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+  .search input{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px}
+  .dlist{overflow:auto;flex:1}
+  .drv{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid #f1f3f6}
+  .drv:hover{background:#f7f9fc}
+  .drv.active{background:var(--accentbg);box-shadow:inset 3px 0 0 var(--accent)}
+  .ava{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;
+    background:#eef1f5;color:#586677;border:2px solid transparent}
+  .drv.debt .ava{border-color:var(--neg);color:var(--neg);background:var(--negbg)}
+  .drv .info{flex:1;min-width:0}
+  .drv .nm{font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drv .car{color:var(--muted);font-size:12px}
+  .chip{font-size:12.5px;font-weight:650;white-space:nowrap}
+  .chip.neg{color:var(--neg)} .chip.pos{color:var(--pos)}
+
+  /* detail */
+  .main{flex:1;overflow:auto;padding:18px 22px}
+  .ph{display:grid;place-items:center;height:100%;color:var(--muted)}
+  .dhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .dhead .nm{font-size:20px;font-weight:700}
+  .dhead .car{color:var(--muted)}
+  .dhead select{margin-left:auto;border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;background:#fff;cursor:pointer}
+  .badge{display:inline-block;background:var(--warnbg);color:var(--warn);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 14px}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  .kpi .v{font-size:19px;font-weight:700;margin-top:2px}
+  .kpi.bal .v.neg{color:var(--neg)} .kpi.bal .v.pos{color:var(--pos)}
+
+  /* quick entry */
+  .quick{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:16px;flex-wrap:wrap}
+  .quick input[type=number]{flex:1;min-width:140px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:16px;font-variant-numeric:tabular-nums}
+  .quick input[type=date]{border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:14px}
+  .quick button{border:0;background:var(--accent);color:#fff;border-radius:9px;padding:11px 18px;font-size:15px;font-weight:650;cursor:pointer}
+  .quick button:active{transform:scale(.98)}
+  .quick .qerr{flex-basis:100%;color:var(--neg);font-size:12px;min-height:0}
+
+  /* calendar */
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+  .wd{font-size:12px;color:var(--muted);text-align:center;padding:2px 0;font-weight:600}
+  .day{min-height:74px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 8px;cursor:pointer;
+    display:flex;flex-direction:column;transition:background .12s,box-shadow .12s}
+  .day.blank{background:transparent;border:0;cursor:default}
+  .day:not(.blank):hover{background:var(--accentbg);box-shadow:inset 0 0 0 1px var(--accent)}
+  .day .dn{font-size:12px;color:var(--muted)}
+  .day.today{box-shadow:inset 0 0 0 2px var(--accent)}
+  .day.paid{background:var(--posbg);border-color:#bfe6cf}
+  .day .amt{margin-top:auto;text-align:right;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:#15613a}
+  .day .vmark{margin-top:auto;text-align:right;font-size:11px;color:var(--muted);text-decoration:line-through}
+  .day.flash{animation:flash .8s ease}
+  @keyframes flash{0%{background:#cdeedb}100%{}}
+
   /* popover */
   .ov{position:fixed;inset:0;background:rgba(20,28,38,.28);display:none;z-index:50}
   .ov.show{display:block}
-  .pop{position:absolute;background:#fff;border:1px solid var(--line);border-radius:12px;
-    box-shadow:0 12px 40px rgba(20,28,38,.22);width:300px;padding:14px}
+  .pop{position:absolute;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(20,28,38,.22);width:300px;padding:14px}
   .pop h3{margin:0 0 2px;font-size:14px}
   .pop .sub{color:var(--muted);font-size:12px;margin-bottom:10px}
-  .plist{margin:0 0 6px;max-height:150px;overflow:auto}
-  .prow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--line)}
+  .plist{margin:0 0 8px;max-height:150px;overflow:auto}
+  .prow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
   .prow.void .amt{text-decoration:line-through;color:var(--muted)}
-  .void-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:2px 7px;cursor:pointer;color:var(--neg);font-size:12px}
-  .addrow{display:flex;gap:6px;margin-top:8px}
-  .addrow input{flex:1;border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:15px}
-  .addrow button{border:0;background:var(--accent);color:#fff;border-radius:7px;padding:8px 13px;cursor:pointer;font-weight:600}
-  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;
-    padding:9px 16px;border-radius:9px;opacity:0;transition:opacity .2s;z-index:60;font-size:13px}
-  .toast.show{opacity:1}
+  .prow .amt{font-variant-numeric:tabular-nums;font-weight:600}
+  .void-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--neg);font-size:12px}
+  .addrow{display:flex;gap:6px;margin-top:6px}
+  .addrow input{flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:15px}
+  .addrow button{border:0;background:var(--accent);color:#fff;border-radius:8px;padding:9px 13px;cursor:pointer;font-weight:600}
   .err{color:var(--neg);font-size:12px;margin-top:6px;min-height:14px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;padding:9px 16px;border-radius:9px;opacity:0;transition:opacity .2s;z-index:60;font-size:13px}
+  .toast.show{opacity:1}
+
+  @media(max-width:760px){
+    .app{flex-direction:column;height:auto}
+    .side{width:100%;max-height:42vh}
+    .kpis{grid-template-columns:repeat(3,1fr)}
+    .day{min-height:58px}
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>Ввод платежей</h1>
   <div class="spacer"></div>
-  <a class="link" href="/">← Дашборд</a>
+  <a class="link" href="/">Дашборд →</a>
 </header>
 
-<div class="controls">
-  <div class="dsel">
-    <label>Водитель</label>
-    <input id="driver" list="drivers" placeholder="Начните вводить фамилию…" autocomplete="off">
-    <datalist id="drivers"></datalist>
-  </div>
-  <div class="dsel">
-    <label>Месяц</label>
-    <div class="months" id="months"></div>
-  </div>
-</div>
-
-<div class="wrap">
-  <div id="view"></div>
+<div class="app">
+  <aside class="side">
+    <div class="search"><input id="q" placeholder="Поиск водителя…" autocomplete="off"></div>
+    <div class="dlist" id="dlist"></div>
+  </aside>
+  <main class="main" id="main"><div class="ph">Выберите водителя слева</div></main>
 </div>
 
 <div class="ov" id="ov"><div class="pop" id="pop"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-let state={drivers:[],months:[],driverId:null,year:null,month:null,data:null};
+const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+let S={drivers:[],months:[],driverId:null,year:null,month:null,data:null,filter:''};
 
 const fmt=n=>(Math.round(n||0)).toLocaleString('ru-RU');
 const money=n=>n<0?'−'+fmt(Math.abs(n)):fmt(n);
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
-
-async function api(path,opts){
-  const r=await fetch(path,opts);
-  if(!r.ok){let d={};try{d=await r.json()}catch(e){}; throw new Error(d.detail||('Ошибка '+r.status))}
-  return r.status===204?null:r.json();
-}
+const initials=n=>n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1700)}
+async function api(p,o){const r=await fetch(p,o);if(!r.ok){let d={};try{d=await r.json()}catch(e){}throw new Error(d.detail||('Ошибка '+r.status))}return r.status===204?null:r.json()}
 
 async function init(){
   const [model,drivers]=await Promise.all([api('/api/model'),api('/api/drivers')]);
-  state.months=(model.months||[]).map(x=>({y:x.year,mo:x.month+1,label:x.label}));
-  state.drivers=drivers;
-  const dl=document.getElementById('drivers');
-  dl.innerHTML=drivers.map(d=>`<option value="${d.name}${d.car?' · '+d.car:''}" data-id="${d.id}">`).join('');
-  const box=document.getElementById('months');box.innerHTML='';
-  state.months.forEach(m=>{
-    const b=document.createElement('button');b.className='mbtn';b.textContent=m.label;b.dataset.key=m.y+'-'+m.mo;
-    b.onclick=()=>{state.year=m.y;state.month=m.mo;syncMonthBtns();load()};box.appendChild(b);
-  });
-  const cur=state.months[state.months.length-1];
-  if(cur){state.year=cur.y;state.month=cur.mo;syncMonthBtns()}
-  document.getElementById('driver').addEventListener('input',onDriverInput);
-}
-function syncMonthBtns(){document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('active',b.dataset.key===state.year+'-'+state.month))}
-
-function onDriverInput(e){
-  const val=e.target.value;
-  // сопоставляем по тексту опции (имя · авто)
-  const d=state.drivers.find(x=>(x.name+(x.car?' · '+x.car:''))===val) || state.drivers.find(x=>x.name===val);
-  if(d){state.driverId=d.id;load()}
+  S.months=(model.months||[]).map(x=>({y:x.year,mo:x.month+1,label:x.label}));
+  const cur=S.months[S.months.length-1]; if(cur){S.year=cur.y;S.month=cur.mo}
+  S.drivers=drivers; renderList();
+  document.getElementById('q').addEventListener('input',e=>{S.filter=e.target.value.toLowerCase();renderList()});
 }
 
-async function load(){
-  if(!state.driverId||!state.year){document.getElementById('view').innerHTML='<div class="empty-state">Выберите водителя и месяц</div>';return}
+function renderList(){
+  const box=document.getElementById('dlist');
+  const f=S.filter;
+  const items=S.drivers.filter(d=>!f||d.name.toLowerCase().includes(f)||(d.car||'').toLowerCase().includes(f));
+  box.innerHTML=items.map(d=>{
+    const debt=d.balance<-0.5;
+    return `<div class="drv${debt?' debt':''}${d.id===S.driverId?' active':''}" data-id="${d.id}">
+      <div class="ava">${initials(d.name)}</div>
+      <div class="info"><div class="nm">${d.name}</div><div class="car">${d.car||'без номера'}</div></div>
+      <div class="chip ${d.balance<0?'neg':'pos'} num">${money(d.balance)}</div></div>`;
+  }).join('')||'<div style="padding:16px;color:var(--muted)">Никого не найдено</div>';
+  box.querySelectorAll('.drv').forEach(el=>el.onclick=()=>{S.driverId=+el.dataset.id;renderList();loadDetail()});
+}
+
+async function loadDetail(){
+  if(!S.driverId)return;
   try{
-    state.data=await api(`/api/driver_month?driver_id=${state.driverId}&year=${state.year}&month=${state.month}`);
-    render();
-  }catch(e){document.getElementById('view').innerHTML=`<div class="empty-state">${e.message}</div>`}
+    S.data=await api(`/api/driver_month?driver_id=${S.driverId}&year=${S.year}&month=${S.month}`);
+    renderDetail();
+  }catch(e){document.getElementById('main').innerHTML=`<div class="ph">${e.message}</div>`}
 }
 
+function todayInMonth(){
+  const t=new Date(); const y=t.getFullYear(),m=t.getMonth()+1;
+  if(y===S.year&&m===S.month) return `${y}-${String(m).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  return `${S.year}-${String(S.month).padStart(2,'0')}-01`;
+}
 function cellPaid(arr){return (arr||[]).filter(p=>!p.voided&&p.source!=='buyout').reduce((s,p)=>s+p.amount,0)}
 
-function render(){
-  const d=state.data;const v=document.getElementById('view');
+function renderDetail(){
+  const d=S.data;const m=document.getElementById('main');
+  const monthOpts=S.months.map(x=>`<option value="${x.y}-${x.mo}"${x.y===S.year&&x.mo===S.month?' selected':''}>${x.label} ${x.y}</option>`).join('');
   if(!d.exists){
-    v.innerHTML=`<div class="card"><div class="dhead"><div class="nm">${d.name||''}</div>
-      <div class="meta">Нет данных за ${d.label}</div></div></div>`;return;
+    m.innerHTML=`<div class="dhead"><span class="nm">${d.name||''}</span><select id="msel">${monthOpts}</select></div>
+      <div class="ph" style="height:200px">Нет данных за ${d.label} ${S.year}</div>`;
+    document.getElementById('msel').onchange=onMonth; return;
   }
-  let rows='';
-  for(let day=1;day<=d.daysInMonth;day++){
+  const dim=d.daysInMonth; const first=(new Date(d.year,d.month-1,1).getDay()+6)%7;
+  const tISO=todayInMonth();
+  let cells='';
+  for(const w of WD) cells+=`<div class="wd">${w}</div>`;
+  for(let i=0;i<first;i++) cells+='<div class="day blank"></div>';
+  for(let day=1;day<=dim;day++){
     const arr=d.days[String(day)]||[];const paid=cellPaid(arr);
-    const voidTxt=arr.some(p=>p.voided)&&!paid?`<span class="void">аннулир.</span>`:'';
-    rows+=`<tr><td><div class="drow ${paid?'':'empty'}" data-day="${day}">
-      <div class="dnum">${day}</div><div class="dval">${paid?fmt(paid):''}${voidTxt}</div></div></td></tr>`;
+    const iso=`${d.year}-${String(d.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const isToday=iso===tISO;
+    const voided=arr.some(p=>p.voided)&&!paid;
+    cells+=`<div class="day${paid?' paid':''}${isToday?' today':''}" data-day="${day}">
+      <div class="dn">${day}</div>
+      ${paid?`<div class="amt">${fmt(paid)}</div>`:voided?`<div class="vmark">аннул.</div>`:''}</div>`;
   }
-  v.innerHTML=`<div class="card">
+  m.innerHTML=`
     <div class="dhead">
-      <div class="nm">${d.name} ${d.status==='frozen'?'<span class="frozenbadge">заморожен</span>':''}</div>
-      <div class="meta"><span>${d.car||'без номера'}</span><span>ставка ${fmt(d.daily_rate)}/сут</span><span>обязат. ${fmt(d.obligation)}/мес</span></div>
+      <span class="nm">${d.name}</span><span class="car">${d.car||'без номера'}</span>
+      ${d.status==='frozen'?'<span class="badge">заморожен</span>':''}
+      <select id="msel">${monthOpts}</select>
     </div>
-    <table class="daytable"><tbody>${rows}</tbody></table>
-    <div class="totbar">
-      <div class="tot"><span class="l">Итого внесено</span><span class="v">${fmt(d.paid)} ₽</span></div>
-      <div class="tot" style="text-align:right"><span class="l">Остаток</span><span class="v ${d.balance<0?'neg':'pos'}">${money(d.balance)} ₽</span></div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Обязательство</div><div class="v num">${fmt(d.obligation)} ₽</div></div>
+      <div class="kpi"><div class="l">Внесено</div><div class="v num">${fmt(d.paid)} ₽</div></div>
+      <div class="kpi bal"><div class="l">Остаток</div><div class="v num ${d.balance<0?'neg':'pos'}">${money(d.balance)} ₽</div></div>
     </div>
-  </div>`;
-  v.querySelectorAll('.drow').forEach(r=>r.onclick=e=>openDay(+r.dataset.day,r));
+    <div class="quick">
+      <input id="qamt" type="number" inputmode="numeric" placeholder="Сумма ₽" autocomplete="off">
+      <input id="qdate" type="date" value="${tISO}" min="${d.year}-${String(d.month).padStart(2,'0')}-01" max="${d.year}-${String(d.month).padStart(2,'0')}-${String(dim).padStart(2,'0')}">
+      <button id="qadd">Внести</button>
+      <div class="qerr" id="qerr"></div>
+    </div>
+    <div class="cal">${cells}</div>`;
+  document.getElementById('msel').onchange=onMonth;
+  const qamt=document.getElementById('qamt');
+  const quick=async()=>{
+    const v=parseFloat(qamt.value);if(!v){document.getElementById('qerr').textContent='Введите сумму';return}
+    await addPayment(v,document.getElementById('qdate').value);
+  };
+  document.getElementById('qadd').onclick=quick;
+  qamt.onkeydown=e=>{if(e.key==='Enter')quick()};
+  qamt.focus();
+  m.querySelectorAll('.day:not(.blank)').forEach(el=>el.onclick=e=>openDay(+el.dataset.day,el));
 }
 
-function openDay(day,rowEl){
-  const d=state.data;const arr=d.days[String(day)]||[];
+function onMonth(e){const [y,mo]=e.target.value.split('-').map(Number);S.year=y;S.month=mo;loadDetail()}
+
+async function addPayment(amount,date,flashDay){
+  try{
+    await api('/api/payments',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rental_month_id:S.data.rental_month_id,amount,paid_at:date})});
+    toast(`+${fmt(amount)} ₽ · ${S.data.name}`);
+    const day=+date.split('-')[2];
+    await refresh(); flash(day);
+  }catch(e){const el=document.getElementById('qerr');if(el)el.textContent=e.message;else alert(e.message)}
+}
+async function refresh(){
+  S.data=await api(`/api/driver_month?driver_id=${S.driverId}&year=${S.year}&month=${S.month}`);
+  // обновим баланс в списке
+  const dr=S.drivers.find(x=>x.id===S.driverId);
+  renderDetail();
+  api('/api/drivers').then(ds=>{S.drivers=ds;renderList()});
+}
+function flash(day){const el=document.querySelector(`.day[data-day="${day}"]`);if(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),800)}}
+
+function openDay(day,el){
+  const d=S.data;const arr=d.days[String(day)]||[];
   const date=`${d.year}-${String(d.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   const pop=document.getElementById('pop');
-  let lst=arr.map(p=>`<div class="prow${p.voided?' void':''}"><span class="amt">${fmt(p.amount)} ₽${p.voided?' (аннулир.)':''}</span>${p.voided?'':`<button class="void-btn" data-pid="${p.id}">аннулировать</button>`}</div>`).join('');
-  if(!arr.length) lst='<div class="sub" style="padding:2px 0">платежей нет</div>';
-  pop.innerHTML=`<h3>${d.name} · ${day}.${String(d.month).padStart(2,'0')}.${d.year}</h3>
-    <div class="sub">${d.car||''}</div>
+  let lst=arr.map(p=>`<div class="prow${p.voided?' void':''}"><span class="amt">${fmt(p.amount)} ₽${p.voided?' (аннул.)':''}</span>${p.voided?'':`<button class="void-btn" data-pid="${p.id}">аннулировать</button>`}</div>`).join('');
+  if(!arr.length)lst='<div class="sub" style="padding:2px 0">платежей нет</div>';
+  pop.innerHTML=`<h3>${d.name} · ${day}.${String(d.month).padStart(2,'0')}.${d.year}</h3><div class="sub">${d.car||''}</div>
     <div class="plist">${lst}</div>
     <div class="addrow"><input id="amt" type="number" inputmode="numeric" placeholder="Сумма ₽" autocomplete="off"><button id="add">Внести</button></div>
     <div class="err" id="err"></div>`;
   const ov=document.getElementById('ov');ov.classList.add('show');
-  const r=rowEl.getBoundingClientRect();
+  const r=el.getBoundingClientRect();
   pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-316))+'px';
-  pop.style.top=Math.max(8,Math.min(r.bottom+6,window.innerHeight-240))+'px';
+  pop.style.top=Math.max(8,Math.min(r.bottom+6,window.innerHeight-250))+'px';
   const amt=document.getElementById('amt');amt.focus();
-  const submit=async()=>{
-    const val=parseFloat(amt.value);
-    if(!val){document.getElementById('err').textContent='Введите сумму';return}
-    try{
-      await api('/api/payments',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({rental_month_id:d.rental_month_id,amount:val,paid_at:date})});
-      close();toast(`+${fmt(val)} ₽`);await load();
-    }catch(e){document.getElementById('err').textContent=e.message}
-  };
+  const submit=async()=>{const v=parseFloat(amt.value);if(!v){document.getElementById('err').textContent='Введите сумму';return}
+    close();await addPayment(v,date)};
   document.getElementById('add').onclick=submit;
   amt.onkeydown=e=>{if(e.key==='Enter')submit();if(e.key==='Escape')close()};
   pop.querySelectorAll('.void-btn').forEach(b=>b.onclick=async()=>{
     const p=arr.find(x=>x.id==b.dataset.pid);
     if(!confirm('Аннулировать платёж '+fmt(p.amount)+' ₽?'))return;
     try{await api(`/api/payments/${b.dataset.pid}/void`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      close();toast('Платёж аннулирован');await load();
+      close();toast('Платёж аннулирован');await refresh();
     }catch(e){document.getElementById('err').textContent=e.message}
   });
 }
