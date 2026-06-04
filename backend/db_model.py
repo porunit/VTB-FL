@@ -66,7 +66,8 @@ def build_model_from_db(session, tz='Europe/Moscow'):
             func.max(Payment.paid_at),
             func.count(Payment.id),
         )
-        .where(Payment.source != PaymentSource.buyout)
+        .where(Payment.source != PaymentSource.buyout,
+               Payment.voided_at.is_(None))
         .group_by(Payment.rental_month_id)
     ).all()
     pay_map = {rm_id: (float(s or 0), mx, int(cnt)) for rm_id, s, mx, cnt in pay_rows}
@@ -75,7 +76,8 @@ def build_model_from_db(session, tz='Europe/Moscow'):
     buy_rows = session.execute(
         select(RentalMonth.year, RentalMonth.month, func.sum(Payment.amount))
         .join(Payment, Payment.rental_month_id == RentalMonth.id)
-        .where(Payment.source == PaymentSource.buyout)
+        .where(Payment.source == PaymentSource.buyout,
+               Payment.voided_at.is_(None))
         .group_by(RentalMonth.year, RentalMonth.month)
     ).all()
     buyout_by_month = [

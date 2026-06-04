@@ -10,16 +10,21 @@ API оператора (этап 1). Единственная точка вво�
 Поле collector_id — кто физически принёс наличку (информационно, баланс не двигает).
 """
 
-from datetime import date
+import calendar
+from collections import defaultdict
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
+MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+             'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
 from db import get_session
 from models import (
-    Driver, NonpaymentReason, Payment, PaymentSource, RentalMonth, RMonthStatus,
-    User, UserRole,
+    Car, Driver, NonpaymentReason, Payment, PaymentSource, RentalMonth,
+    RMonthStatus, User, UserRole,
 )
 
 router = APIRouter(prefix='/api', tags=['operator'])
@@ -42,7 +47,8 @@ def _paid_and_balance(session, rm):
     paid = session.scalar(
         select(func.coalesce(func.sum(Payment.amount), 0))
         .where(Payment.rental_month_id == rm.id,
-               Payment.source != PaymentSource.buyout)
+               Payment.source != PaymentSource.buyout,
+               Payment.voided_at.is_(None))
     ) or 0
     paid = float(paid)
     return paid, round(paid - float(rm.obligation), 2)
@@ -147,6 +153,90 @@ def get_rental_month(rm_id: int):
         return RentalMonthOut(id=rm.id, driver_id=rm.driver_id, year=rm.year, month=rm.month,
                               obligation=float(rm.obligation), paid=paid, balance=balance,
                               status=rm.status, reason=rm.reason)
+    finally:
+        session.close()
+
+
+class VoidIn(BaseModel):
+    reason: str | None = None
+
+
+@router.post('/payments/{pid}/void', response_model=PaymentOut)
+def void_payment(pid: int, body: VoidIn):
+    """Аннулировать платёж (append-only: не удаляем, помечаем). Идемпотентно — 409
+    если уже аннулирован. Для исправления: аннулируй ошибочный, добавь верный."""
+    session = get_session()
+    try:
+        p = session.get(Payment, pid)
+        if p is None:
+            raise HTTPException(404, f'payment {pid} не найден')
+        if p.voided_at is not None:
+            raise HTTPException(409, 'платёж уже аннулирован')
+        op = _operator_user(session)
+        p.voided_at = datetime.now(timezone.utc)
+        p.voided_by = op.id
+        p.void_reason = body.reason
+        session.flush()
+        rm = session.get(RentalMonth, p.rental_month_id)
+        paid, balance = _paid_and_balance(session, rm)
+        session.commit()
+        return PaymentOut(id=p.id, rental_month_id=p.rental_month_id, amount=float(p.amount),
+                          paid_at=p.paid_at, source=p.source,
+                          month_paid=paid, month_balance=balance)
+    finally:
+        session.close()
+
+
+@router.get('/month_grid')
+def month_grid(year: int, month: int):
+    """Сетка месяца как в исходной таблице: столбцы-водители, строки-дни,
+    в ячейках — платежи за день. Шапка (ставка/обязательство/авто) и
+    подвал (Итого/Осталось) — для ввода кликом по ячейке."""
+    if not 1 <= month <= 12:
+        raise HTTPException(422, 'month вне 1..12')
+    session = get_session()
+    try:
+        rows = session.execute(
+            select(RentalMonth, Driver.full_name, Car.plate)
+            .join(Driver, Driver.id == RentalMonth.driver_id)
+            .join(Car, Car.id == RentalMonth.car_id)
+            .where(RentalMonth.year == year, RentalMonth.month == month)
+            .order_by(Driver.full_name)
+        ).all()
+
+        rm_ids = [rm.id for rm, _, _ in rows]
+        by_rm = defaultdict(lambda: defaultdict(list))
+        if rm_ids:
+            pays = session.execute(
+                select(Payment).where(Payment.rental_month_id.in_(rm_ids))
+                .order_by(Payment.created_at)
+            ).scalars().all()
+            for p in pays:
+                by_rm[p.rental_month_id][p.paid_at.day].append({
+                    'id': p.id, 'amount': float(p.amount),
+                    'voided': p.voided_at is not None, 'source': p.source.value,
+                })
+
+        drivers = []
+        for rm, name, plate in rows:
+            days = by_rm.get(rm.id, {})
+            paid = round(sum(pp['amount'] for d in days.values()
+                             for pp in d if not pp['voided']
+                             and pp['source'] != PaymentSource.buyout.value), 2)
+            drivers.append({
+                'rental_month_id': rm.id, 'driver_id': rm.driver_id, 'name': name,
+                'car': plate, 'daily_rate': float(rm.daily_rate),
+                'obligation': float(rm.obligation),
+                'paid': paid, 'balance': round(paid - float(rm.obligation), 2),
+                'status': rm.status.value, 'reason': rm.reason.value if rm.reason else None,
+                'days': {str(d): v for d, v in days.items()},
+            })
+
+        return {
+            'year': year, 'month': month, 'label': MONTHS_RU[month - 1],
+            'daysInMonth': calendar.monthrange(year, month)[1],
+            'drivers': drivers,
+        }
     finally:
         session.close()
 

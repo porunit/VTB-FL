@@ -159,6 +159,11 @@ class Payment(Base):
     collector_id: Mapped[int | None] = mapped_column(ForeignKey('users.id'))
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created()
+    # Аннулирование (append-only журнал): платёж не удаляется и не правится,
+    # а помечается аннулированным. В баланс/paid входят только voided_at IS NULL.
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    voided_by: Mapped[int | None] = mapped_column(ForeignKey('users.id'))
+    void_reason: Mapped[str | None] = mapped_column(Text)
 
     rental_month: Mapped['RentalMonth'] = relationship(back_populates='payments')
     __table_args__ = (CheckConstraint('amount <> 0', name='ck_payment_amount_nonzero'),)
