@@ -45,6 +45,7 @@ import parser as model_parser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX_HTML = os.path.join(ROOT, 'index.html')
+ENTRY_HTML = os.path.join(ROOT, 'entry.html')
 CACHE_TTL = int(os.environ.get('CACHE_TTL', '45'))
 
 # Источник модели дашборда: 'sheet' (Google-таблица, по умолчанию) или 'db' (Postgres).
@@ -110,6 +111,11 @@ def auth(creds: HTTPBasicCredentials = Depends(_security)):
 @app.get('/')
 def index(_=Depends(auth)):
     return FileResponse(INDEX_HTML, media_type='text/html; charset=utf-8')
+
+
+@app.get('/entry')
+def entry(_=Depends(auth)):
+    return FileResponse(ENTRY_HTML, media_type='text/html; charset=utf-8')
 
 
 @app.get('/api/model')
