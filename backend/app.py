@@ -123,6 +123,13 @@ def healthz():
     return {'ok': True}
 
 
+# ---- API оператора (этап 1) — под той же защитой, что и дашборд ----------
+# Подключается, только если задан DATABASE_URL (иначе вводить деньги некуда).
+if os.environ.get('DATABASE_URL'):
+    import operator_api
+    app.include_router(operator_api.router, dependencies=[Depends(auth)])
+
+
 if __name__ == '__main__':
     import uvicorn
     port = int(os.environ.get('PORT', '8080'))
