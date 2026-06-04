@@ -92,6 +92,8 @@ class Driver(Base):
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     phone: Mapped[str | None] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)   # адрес встречи (для сборщика)
+    context: Mapped[str | None] = mapped_column(Text)   # закреплённый контекст/памятка
     in_park: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = _created()

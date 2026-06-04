@@ -44,7 +44,10 @@
   .dhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
   .dhead .nm{font-size:20px;font-weight:700}
   .dhead .car{color:var(--muted)}
-  .dhead select{margin-left:auto;border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;background:#fff;cursor:pointer}
+  .hctrl{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .dhead select{border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;background:#fff;cursor:pointer}
+  .ghost{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 13px;font-size:14px;cursor:pointer;color:var(--ink)}
+  .ghost:hover{background:#f3f5f8}
   .badge{display:inline-block;background:var(--warnbg);color:var(--warn);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .kpi{background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 14px}
@@ -90,6 +93,25 @@
   .addrow input{flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:15px}
   .addrow button{border:0;background:var(--accent);color:#fff;border-radius:8px;padding:9px 13px;cursor:pointer;font-weight:600}
   .err{color:var(--neg);font-size:12px;margin-top:6px;min-height:14px}
+  /* profile modal */
+  .movl{position:fixed;inset:0;background:rgba(20,28,38,.4);display:none;z-index:55;align-items:flex-start;justify-content:center}
+  .movl.show{display:flex}
+  .modal{background:#fff;border-radius:14px;width:min(440px,92vw);margin-top:6vh;max-height:86vh;overflow:auto;box-shadow:0 18px 60px rgba(20,28,38,.3)}
+  .modal .mh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+  .modal .mh h2{font-size:17px;margin:0}
+  .modal .x{border:0;background:#f1f3f6;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:16px;color:var(--muted)}
+  .mbody{padding:16px 18px}
+  .fld{margin-bottom:12px}
+  .fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .fld input,.fld textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:14px;font-family:inherit}
+  .fld textarea{resize:vertical;min-height:54px}
+  .park{display:flex;align-items:center;gap:8px;margin:6px 0 14px}
+  .sec-t{font-size:13px;font-weight:650;margin:16px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .note{border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;position:relative}
+  .note .nb{font-size:14px;white-space:pre-wrap}
+  .note .nm2{font-size:11px;color:var(--muted);margin-top:4px}
+  .note .del{position:absolute;top:6px;right:6px;border:0;background:none;color:var(--muted);cursor:pointer;font-size:13px}
+  .saveb{border:0;background:var(--accent);color:#fff;border-radius:9px;padding:10px 16px;font-weight:650;cursor:pointer}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;padding:9px 16px;border-radius:9px;opacity:0;transition:opacity .2s;z-index:60;font-size:13px}
   .toast.show{opacity:1}
 
@@ -117,6 +139,7 @@
 </div>
 
 <div class="ov" id="ov"><div class="pop" id="pop"></div></div>
+<div class="movl" id="movl"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -170,9 +193,11 @@ function renderDetail(){
   const d=S.data;const m=document.getElementById('main');
   const monthOpts=S.months.map(x=>`<option value="${x.y}-${x.mo}"${x.y===S.year&&x.mo===S.month?' selected':''}>${x.label} ${x.y}</option>`).join('');
   if(!d.exists){
-    m.innerHTML=`<div class="dhead"><span class="nm">${d.name||''}</span><select id="msel">${monthOpts}</select></div>
+    m.innerHTML=`<div class="dhead"><span class="nm">${d.name||''}</span>
+      <div class="hctrl"><button class="ghost" id="profbtn">Профиль</button><select id="msel">${monthOpts}</select></div></div>
       <div class="ph" style="height:200px">Нет данных за ${d.label} ${S.year}</div>`;
-    document.getElementById('msel').onchange=onMonth; return;
+    document.getElementById('msel').onchange=onMonth;
+    document.getElementById('profbtn').onclick=openProfile; return;
   }
   const dim=d.daysInMonth; const first=(new Date(d.year,d.month-1,1).getDay()+6)%7;
   const tISO=todayInMonth();
@@ -192,7 +217,7 @@ function renderDetail(){
     <div class="dhead">
       <span class="nm">${d.name}</span><span class="car">${d.car||'без номера'}</span>
       ${d.status==='frozen'?'<span class="badge">заморожен</span>':''}
-      <select id="msel">${monthOpts}</select>
+      <div class="hctrl"><button class="ghost" id="profbtn">Профиль</button><select id="msel">${monthOpts}</select></div>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="l">Обязательство</div><div class="v num">${fmt(d.obligation)} ₽</div></div>
@@ -207,6 +232,7 @@ function renderDetail(){
     </div>
     <div class="cal">${cells}</div>`;
   document.getElementById('msel').onchange=onMonth;
+  document.getElementById('profbtn').onclick=openProfile;
   const qamt=document.getElementById('qamt');
   const quick=async()=>{
     const v=parseFloat(qamt.value);if(!v){document.getElementById('qerr').textContent='Введите сумму';return}
@@ -267,7 +293,61 @@ function openDay(day,el){
 }
 function close(){document.getElementById('ov').classList.remove('show')}
 document.getElementById('ov').onclick=e=>{if(e.target.id==='ov')close()};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();closeProf()}});
+
+// ----- профиль водителя (контакты, контекст, комментарии) -----
+let PROF=null;
+async function openProfile(){
+  if(!S.driverId)return;
+  try{PROF=await api(`/api/drivers/${S.driverId}/profile`);renderProfile();
+    document.getElementById('movl').classList.add('show');
+  }catch(e){alert(e.message)}
+}
+function closeProf(){document.getElementById('movl').classList.remove('show')}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+function renderProfile(){
+  const p=PROF;
+  const notes=p.notes.map(n=>`<div class="note" data-id="${n.id}"><div class="nb">${esc(n.body)}</div>
+    <div class="nm2">${n.author||''} · ${n.created_at?new Date(n.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</div>
+    <button class="del" data-del="${n.id}">✕</button></div>`).join('')||'<div class="sub" style="color:var(--muted)">Пока нет комментариев</div>';
+  document.getElementById('modal').innerHTML=`
+    <div class="mh"><h2>${esc(p.name)}</h2><button class="x" id="px">✕</button></div>
+    <div class="mbody">
+      <div class="sub" style="color:var(--muted);margin-bottom:6px">${p.car||'без номера'} · долг ${money(p.balance)} ₽</div>
+      <div class="fld"><label>Телефон</label><input id="p_phone" value="${esc(p.phone)}" placeholder="+7 …"></div>
+      <div class="fld"><label>Адрес встречи</label><input id="p_addr" value="${esc(p.address)}" placeholder="где забирать деньги"></div>
+      <div class="fld"><label>Контекст / памятка</label><textarea id="p_ctx" placeholder="когда удобно, особенности…">${esc(p.context)}</textarea></div>
+      <label class="park"><input type="checkbox" id="p_park" ${p.in_park?'checked':''}> В парке (на линии)</label>
+      <button class="saveb" id="psave">Сохранить</button>
+      <div class="err" id="perr"></div>
+      <div class="sec-t">Комментарии</div>
+      <div class="fld" style="display:flex;gap:6px"><input id="p_note" placeholder="Добавить комментарий…"><button class="saveb" id="paddnote">+</button></div>
+      <div id="notes">${notes}</div>
+    </div>`;
+  document.getElementById('px').onclick=closeProf;
+  document.getElementById('psave').onclick=saveProfile;
+  const addn=async()=>{
+    const v=document.getElementById('p_note').value.trim();if(!v)return;
+    await api(`/api/drivers/${p.id}/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:v})});
+    PROF=await api(`/api/drivers/${p.id}/profile`);renderProfile();toast('Комментарий добавлен');
+  };
+  document.getElementById('paddnote').onclick=addn;
+  document.getElementById('p_note').onkeydown=e=>{if(e.key==='Enter')addn()};
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('Удалить комментарий?'))return;
+    await api(`/api/notes/${b.dataset.del}`,{method:'DELETE'});
+    PROF=await api(`/api/drivers/${p.id}/profile`);renderProfile();
+  });
+}
+async function saveProfile(){
+  try{
+    await api(`/api/drivers/${PROF.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:document.getElementById('p_phone').value,address:document.getElementById('p_addr').value,
+        context:document.getElementById('p_ctx').value,in_park:document.getElementById('p_park').checked})});
+    toast('Сохранено');closeProf();
+  }catch(e){document.getElementById('perr').textContent=e.message}
+}
+document.getElementById('movl').onclick=e=>{if(e.target.id==='movl')closeProf()};
 
 init();
 </script>

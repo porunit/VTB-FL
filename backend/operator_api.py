@@ -23,7 +23,7 @@ MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Ма
 
 from db import get_session
 from models import (
-    Car, Driver, NonpaymentReason, Payment, PaymentSource, RentalMonth,
+    Car, Driver, NonpaymentReason, Note, Payment, PaymentSource, RentalMonth,
     RMonthStatus, User, UserRole,
 )
 
@@ -219,6 +219,105 @@ def list_drivers():
             'id': i, 'name': n, 'active': a, 'car': car_by_driver.get(i, ''),
             'balance': round(float(paid.get(i, 0)) - float(obl.get(i, 0)), 2),
         } for i, n, a in rows]
+    finally:
+        session.close()
+
+
+# --------- обогащение водителя (контакты, контекст, комментарии) ---------
+class DriverPatch(BaseModel):
+    phone: str | None = None
+    address: str | None = None
+    context: str | None = None
+    in_park: bool | None = None
+
+
+class NoteIn(BaseModel):
+    body: str = Field(..., min_length=1)
+
+
+@router.get('/drivers/{driver_id}/profile')
+def driver_profile(driver_id: int):
+    """Профиль водителя: контакты/контекст + комментарии + сводка долга.
+    Это данные, которые понадобятся боту сборщика (этап 2)."""
+    session = get_session()
+    try:
+        d = session.get(Driver, driver_id)
+        if d is None:
+            raise HTTPException(404, 'водитель не найден')
+        car = session.scalar(
+            select(Car.plate).join(RentalMonth, RentalMonth.car_id == Car.id)
+            .where(RentalMonth.driver_id == driver_id)
+            .order_by(RentalMonth.year.desc(), RentalMonth.month.desc()).limit(1))
+        obl = session.scalar(select(func.coalesce(func.sum(RentalMonth.obligation), 0))
+                             .where(RentalMonth.driver_id == driver_id)) or 0
+        paid = session.scalar(
+            select(func.coalesce(func.sum(Payment.amount), 0))
+            .join(RentalMonth, RentalMonth.id == Payment.rental_month_id)
+            .where(RentalMonth.driver_id == driver_id,
+                   Payment.voided_at.is_(None), Payment.source != PaymentSource.buyout)) or 0
+        notes = session.execute(
+            select(Note.id, Note.body, Note.created_at, User.name)
+            .outerjoin(User, User.id == Note.created_by)
+            .where(Note.driver_id == driver_id, Note.rental_month_id.is_(None))
+            .order_by(Note.created_at.desc())
+        ).all()
+        return {
+            'id': d.id, 'name': d.full_name, 'phone': d.phone, 'address': d.address,
+            'context': d.context, 'in_park': d.in_park, 'car': car or '',
+            'obligation_total': round(float(obl), 2), 'paid_total': round(float(paid), 2),
+            'balance': round(float(paid) - float(obl), 2),
+            'notes': [{'id': i, 'body': b, 'created_at': c.isoformat() if c else None,
+                       'author': a} for i, b, c, a in notes],
+        }
+    finally:
+        session.close()
+
+
+@router.patch('/drivers/{driver_id}')
+def patch_driver(driver_id: int, body: DriverPatch):
+    """Обновить контакты/контекст водителя."""
+    session = get_session()
+    try:
+        d = session.get(Driver, driver_id)
+        if d is None:
+            raise HTTPException(404, 'водитель не найден')
+        for field in ('phone', 'address', 'context', 'in_park'):
+            val = getattr(body, field)
+            if val is not None:
+                setattr(d, field, val)
+        session.commit()
+        return {'id': d.id, 'phone': d.phone, 'address': d.address,
+                'context': d.context, 'in_park': d.in_park}
+    finally:
+        session.close()
+
+
+@router.post('/drivers/{driver_id}/notes', status_code=201)
+def add_note(driver_id: int, body: NoteIn):
+    """Добавить комментарий к водителю (с датой/автором)."""
+    session = get_session()
+    try:
+        if session.get(Driver, driver_id) is None:
+            raise HTTPException(404, 'водитель не найден')
+        op = _operator_user(session)
+        n = Note(driver_id=driver_id, body=body.body.strip(), created_by=op.id)
+        session.add(n)
+        session.commit()
+        return {'id': n.id, 'body': n.body,
+                'created_at': n.created_at.isoformat() if n.created_at else None}
+    finally:
+        session.close()
+
+
+@router.delete('/notes/{note_id}', status_code=204)
+def delete_note(note_id: int):
+    session = get_session()
+    try:
+        n = session.get(Note, note_id)
+        if n is None:
+            raise HTTPException(404, 'комментарий не найден')
+        session.delete(n)
+        session.commit()
     finally:
         session.close()
 
