@@ -735,6 +735,7 @@ function renderLeasing(){
   }
   const m=shortMonth, money0=v=>moneyAbs(v);
   const cd=D.currentDelta, rr=D.runRate;
+  const totalLease=L.months.reduce((s,mo)=>s+(mo.total||0),0); // вся оставшаяся сумма к выплате лизингу
   const dClass=v=>v>=0?'bal-pos':'bal-neg';
   // KPI-полоса лизинга
   const kpi=`
@@ -742,7 +743,7 @@ function renderLeasing(){
       <div class="kpi"><div class="lbl">Лизинг / мес (сейчас)</div><div class="val num" style="color:var(--debt)">${moneyAbs(D.currentLeasing)}</div><div class="sub">${L.months[0].label}</div></div>
       <div class="kpi"><div class="lbl">Дельта структурная</div><div class="val num ${dClass(cd.obligation)}">${money(cd.obligation)}</div><div class="sub">обязательство − лизинг</div></div>
       <div class="kpi"><div class="lbl">Дельта кассовая</div><div class="val num ${dClass(cd.collected)}">${money(cd.collected)}</div><div class="sub">собрано − лизинг</div></div>
-      <div class="kpi"><div class="lbl">Выручка run-rate</div><div class="val num">${moneyAbs(rr.obligation)}</div><div class="sub">обяз · собрано ${moneyAbs(rr.collected)}</div></div>
+      <div class="kpi"><div class="lbl">Всего к выплате лизингу</div><div class="val num" style="color:var(--debt)">${moneyAbs(totalLease)}</div><div class="sub">остаток графика · ${L.months.length} мес</div></div>
       <div class="kpi"><div class="lbl">Выход в плюс · структ.</div><div class="val" style="font-size:18px">${D.breakeven.obligation||'—'}</div><div class="sub">обязательство ≥ лизинг</div></div>
       <div class="kpi"><div class="lbl">Выход в плюс · касса</div><div class="val" style="font-size:18px">${D.breakeven.collected||'—'}</div><div class="sub">собрано ≥ лизинг</div></div>
     </div>`;
