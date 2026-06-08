@@ -18,6 +18,7 @@ from googleapiclient.discovery import build
 
 SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1oTdRh6ZIDqU4IBoUZghRvGTdsIEBDtASYKD81PwGPrk')
 SHEET_GID = int(os.environ.get('SHEET_GID', '2080478081'))
+LEASING_GID = int(os.environ.get('LEASING_GID', '152169489'))  # лист «Платежи в лизинговую»
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 _SHEETS_EPOCH = datetime(1899, 12, 30)
@@ -132,3 +133,26 @@ def fetch_grid():
             frow.extend([''] * (width - len(frow)))
 
     return rows, formulas, tz
+
+
+def fetch_leasing():
+    """Возвращает строки листа лизинговых платежей (UNFORMATTED_VALUE) или []
+    если лист не найден. Структура: r1 — контрагент + месяцы по колонкам,
+    r2..N — лизингодатели с суммами, последняя строка — итог по месяцу."""
+    service = _service()
+    meta = service.spreadsheets().get(
+        spreadsheetId=SPREADSHEET_ID,
+        fields='sheets.properties(sheetId,title)',
+    ).execute()
+    title = None
+    for s in meta.get('sheets') or []:
+        if (s.get('properties') or {}).get('sheetId') == LEASING_GID:
+            title = s['properties'].get('title')
+            break
+    if not title:
+        return []
+    resp = service.spreadsheets().values().get(
+        spreadsheetId=SPREADSHEET_ID, range=title,
+        valueRenderOption='UNFORMATTED_VALUE',
+    ).execute()
+    return resp.get('values') or []
