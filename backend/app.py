@@ -61,7 +61,11 @@ def get_model():
     # Тяжёлое чтение — вне локана, чтобы не блокировать всех зрителей.
     try:
         rows, formulas, tz = sheet.fetch_grid()
-        data = model_parser.build_model(rows, formulas, tz)
+        try:
+            leasing_rows = sheet.fetch_leasing()
+        except Exception:  # noqa: BLE001 — лизинг необязателен, не валим модель
+            leasing_rows = None
+        data = model_parser.build_model(rows, formulas, tz, leasing_rows=leasing_rows)
     except Exception as err:  # noqa: BLE001
         import traceback
         return {'error': str(err), 'stack': traceback.format_exc()}

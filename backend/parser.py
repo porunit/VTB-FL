@@ -168,7 +168,97 @@ def _tzinfo(tz):
         return dt_timezone(timedelta(hours=3)) if tz == 'Europe/Moscow' else dt_timezone.utc
 
 
-def build_model(rows, formulas, tz='Europe/Moscow'):
+# ---------------------------------------------------------------------------
+# Лизинговые платежи и дельта (приход водителей − лизинг)
+# ---------------------------------------------------------------------------
+
+def build_leasing(rows):
+    """Лист «Платежи в лизинговую» → {counterparties, months[{label,year,month,
+    sortKey,total,byCounterparty}]}. Месяцы — из шапки (r1), суммы — из строк
+    лизингодателей (у кого заполнена колонка A). Итоговая строка (пустой A) — мимо."""
+    if not rows:
+        return None
+    header = rows[0] if rows else []
+    colmap = []  # (col_index, year, month, label)
+    for j in range(1, len(header)):
+        lbl = '' if header[j] is None else str(header[j])
+        mo = month_from_label(lbl)
+        ym = re.search(r'(20\d{2})', lbl)
+        if mo < 0 or not ym:
+            continue
+        colmap.append((j, int(ym.group(1)), mo, lbl.strip()))
+
+    cp_rows = []
+    for r in range(1, len(rows)):
+        name = rows[r][0] if rows[r] else None
+        nm = clean_name(name) if name is not None else ''
+        if not nm:
+            continue  # строка-итог без названия контрагента
+        cp_rows.append((nm, rows[r]))
+
+    counterparties = [nm for nm, _ in cp_rows]
+    months = []
+    for (j, y, mo, lbl) in colmap:
+        by = {}
+        total = 0.0
+        for nm, row in cp_rows:
+            v = parse_num(_cell(row, j))
+            by[nm] = round2(v)
+            total += v
+        months.append({'label': lbl, 'year': y, 'month': mo, 'sortKey': y * 12 + mo,
+                       'total': round2(total), 'byCounterparty': by})
+    months.sort(key=lambda m: m['sortKey'])
+    return {'counterparties': counterparties, 'months': months}
+
+
+def build_delta(model, leasing):
+    """Связка приход водителей ↔ лизинг по месяцам + проекция вперёд.
+    Выручка: фактическая по закрытым месяцам водителей, для будущих месяцев —
+    run-rate (среднее закрытых). Лизинг отрицательный → delta = выручка + лизинг."""
+    # помесячный приход от водителей
+    dagg = {}
+    for d in model['drivers']:
+        for e in d['monthly']:
+            k = e['year'] * 12 + e['month']
+            a = dagg.setdefault(k, {'obl': 0.0, 'paid': 0.0, 'isCurrent': e['isCurrent']})
+            a['obl'] += abs(e['obligation'])
+            a['paid'] += e['paid']
+    closed = [a for a in dagg.values() if not a['isCurrent']]
+    rr_obl = sum(a['obl'] for a in closed) / len(closed) if closed else 0.0
+    rr_paid = sum(a['paid'] for a in closed) / len(closed) if closed else 0.0
+
+    out = []
+    be_obl = be_paid = None
+    for lm in leasing['months']:
+        k = lm['year'] * 12 + lm['month']
+        lease = lm['total']  # отрицательный
+        a = dagg.get(k)
+        if a and not a['isCurrent']:
+            obl, paid, projected = a['obl'], a['paid'], False
+        else:
+            obl, paid, projected = rr_obl, rr_paid, True
+        do = round2(obl + lease)
+        dp = round2(paid + lease)
+        if be_obl is None and do >= 0:
+            be_obl = lm['label']
+        if be_paid is None and dp >= 0:
+            be_paid = lm['label']
+        out.append({'label': lm['label'], 'year': lm['year'], 'month': lm['month'],
+                    'leasing': lease, 'obligationRevenue': round2(obl), 'collectedRevenue': round2(paid),
+                    'deltaObligation': do, 'deltaCollected': dp, 'projected': projected})
+
+    first_lease = abs(leasing['months'][0]['total']) if leasing['months'] else 0.0
+    return {
+        'runRate': {'obligation': round2(rr_obl), 'collected': round2(rr_paid)},
+        'currentLeasing': round2(leasing['months'][0]['total']) if leasing['months'] else 0,
+        'currentDelta': {'obligation': round2(rr_obl - first_lease),
+                         'collected': round2(rr_paid - first_lease)},
+        'breakeven': {'obligation': be_obl, 'collected': be_paid},
+        'months': out,
+    }
+
+
+def build_model(rows, formulas, tz='Europe/Moscow', leasing_rows=None):
     now = datetime.now(_tzinfo(tz))
     today = {'y': now.year, 'm': now.month - 1, 'd': now.day}
     today_ms = int(datetime(today['y'], today['m'] + 1, today['d'],
@@ -338,7 +428,13 @@ def build_model(rows, formulas, tz='Europe/Moscow'):
         else:
             mm['daysElapsed'] = mm['daysInMonth']
 
-    return aggregate(records, months, buyout_by_month, today, today_ms, tz)
+    model = aggregate(records, months, buyout_by_month, today, today_ms, tz)
+    if leasing_rows:
+        leasing = build_leasing(leasing_rows)
+        if leasing:
+            model['leasing'] = leasing
+            model['delta'] = build_delta(model, leasing)
+    return model
 
 
 # ---------------------------------------------------------------------------

@@ -257,6 +257,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Матрица</button>
       <button data-v="drivers">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>Водители</button>
+      <button data-v="leasing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Лизинг и дельта</button>
     </div>
     <div class="controls" id="controls" style="display:none">
       <input id="qName" placeholder="Поиск по ФИО…">
@@ -362,7 +364,7 @@ const CHART = {tick:'#5c6671',grid:'#e3e6ea',label:'#3a4149',bar:'#c0392b',barMu
 let MODEL=null, VIEW='dynamics';
 let sortBy='closedBalance', sortDir=1;       // таблица водителей
 let mxSortMonth=null, mxSortDir=1;           // матрица (null = по накопл. балансу)
-let agingChart=null, collChart=null, mChart=null, dynChart=null, monthChart=null;
+let agingChart=null, collChart=null, mChart=null, dynChart=null, monthChart=null, leasingChart=null;
 if(typeof Chart!=='undefined'){Chart.defaults.animation=false;Chart.defaults.font.family='Inter,system-ui,sans-serif';}
 
 // ===========================================================================
@@ -484,9 +486,11 @@ function renderKPIs(){
 
 // ---- Переключатель вкладок ----
 function renderMain(){
-  document.getElementById('controls').style.display=(VIEW==='dynamics')?'none':'flex';
+  const showControls=(VIEW==='matrix'||VIEW==='drivers');
+  document.getElementById('controls').style.display=showControls?'flex':'none';
   if(VIEW==='dynamics') renderDynamics();
   else if(VIEW==='matrix') renderMatrix();
+  else if(VIEW==='leasing') renderLeasing();
   else renderDrivers();
 }
 
@@ -720,6 +724,85 @@ function filterDrivers(){
 }
 
 // ===========================================================================
+// ВКЛАДКА — Лизинг и дельта (приход водителей − лизинговые платежи)
+// ===========================================================================
+function renderLeasing(){
+  const p=document.getElementById('mainPanel');
+  const L=MODEL.leasing, D=MODEL.delta;
+  if(!L||!D){
+    p.innerHTML=`<h2>Лизинг и дельта</h2><div class="empty">Данные лизинга недоступны (лист «Платежи в лизинговую» не прочитан).</div>`;
+    return;
+  }
+  const m=shortMonth, money0=v=>moneyAbs(v);
+  const cd=D.currentDelta, rr=D.runRate;
+  const dClass=v=>v>=0?'bal-pos':'bal-neg';
+  // KPI-полоса лизинга
+  const kpi=`
+    <div class="kpis" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none">
+      <div class="kpi"><div class="lbl">Лизинг / мес (сейчас)</div><div class="val num" style="color:var(--debt)">${moneyAbs(D.currentLeasing)}</div><div class="sub">${L.months[0].label}</div></div>
+      <div class="kpi"><div class="lbl">Дельта структурная</div><div class="val num ${dClass(cd.obligation)}">${money(cd.obligation)}</div><div class="sub">обязательство − лизинг</div></div>
+      <div class="kpi"><div class="lbl">Дельта кассовая</div><div class="val num ${dClass(cd.collected)}">${money(cd.collected)}</div><div class="sub">собрано − лизинг</div></div>
+      <div class="kpi"><div class="lbl">Выручка run-rate</div><div class="val num">${moneyAbs(rr.obligation)}</div><div class="sub">обяз · собрано ${moneyAbs(rr.collected)}</div></div>
+      <div class="kpi"><div class="lbl">Выход в плюс · структ.</div><div class="val" style="font-size:18px">${D.breakeven.obligation||'—'}</div><div class="sub">обязательство ≥ лизинг</div></div>
+      <div class="kpi"><div class="lbl">Выход в плюс · касса</div><div class="val" style="font-size:18px">${D.breakeven.collected||'—'}</div><div class="sub">собрано ≥ лизинг</div></div>
+    </div>`;
+  p.innerHTML=`
+    <h2>Лизинг и дельта <span class="hint">${L.months.length} мес · ${L.counterparties.length} лизингодателей · выручка — текущий темп</span></h2>
+    ${kpi}
+    <div class="chart-box" style="height:300px;position:relative"><canvas id="leaseChart"></canvas></div>
+    <div class="tbl-scroll" style="max-height:340px">
+      <table class="dt">
+        <thead><tr>
+          <th class="nos">Месяц</th><th class="nos">Лизинг</th><th class="nos">Выручка (обяз.)</th>
+          <th class="nos">Дельта структ.</th><th class="nos">Выручка (собр.)</th><th class="nos">Дельта касс.</th>
+        </tr></thead>
+        <tbody>${D.months.map(x=>`
+          <tr${(x.label===D.breakeven.obligation)?' style="outline:2px solid var(--green);outline-offset:-2px"':''}>
+            <td><span class="name">${x.label}</span>${x.projected?' <span class="chip cur">прогноз</span>':''}</td>
+            <td class="num bal-neg">${money(x.leasing)}</td>
+            <td class="num">${moneyAbs(x.obligationRevenue)}</td>
+            <td class="num ${dClass(x.deltaObligation)}">${money(x.deltaObligation)}</td>
+            <td class="num">${moneyAbs(x.collectedRevenue)}</td>
+            <td class="num ${dClass(x.deltaCollected)}">${money(x.deltaCollected)}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="sec-title" style="padding:0 14px">Лизингодатели — платёж сейчас и когда заканчивается</div>
+    <div class="tbl-scroll" style="max-height:240px">
+      <table class="dt">
+        <thead><tr><th class="nos">Лизингодатель</th><th class="nos">Платёж/мес (сейчас)</th><th class="nos">Последний месяц</th></tr></thead>
+        <tbody>${L.counterparties.map(cp=>{
+          const cur=L.months[0].byCounterparty[cp]||0;
+          let last='—';
+          for(let i=L.months.length-1;i>=0;i--){ if(Math.abs(L.months[i].byCounterparty[cp]||0)>0.5){ last=L.months[i].label; break; } }
+          return `<tr><td><span class="name">${esc(cp)}</span></td><td class="num bal-neg">${money(cur)}</td><td>${last}</td></tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+
+  if(typeof Chart==='undefined')return;
+  const ctx=document.getElementById('leaseChart');
+  void ctx.parentElement.offsetHeight;
+  if(leasingChart)leasingChart.destroy();
+  leasingChart=new Chart(ctx,{data:{
+    labels:D.months.map(x=>m(x.label)),
+    datasets:[
+      {type:'bar',label:'Лизинг (отток)',data:D.months.map(x=>Math.abs(x.leasing)),
+       backgroundColor:'#e2b3ad',borderColor:'#c0392b',borderWidth:1,maxBarThickness:26,order:3},
+      {type:'line',label:'Выручка — обязательство',data:D.months.map(x=>x.obligationRevenue),
+       borderColor:'#1e7d34',backgroundColor:'#1e7d34',borderWidth:2,pointRadius:0,tension:.1,order:1},
+      {type:'line',label:'Выручка — собрано',data:D.months.map(x=>x.collectedRevenue),
+       borderColor:'#0d8f80',backgroundColor:'#0d8f80',borderWidth:2,borderDash:[5,3],pointRadius:0,tension:.1,order:2}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:CHART.label,boxWidth:12,font:{size:11},usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.dataset.type==='bar'?-c.raw:c.raw)}}},
+    scales:{x:{grid:{display:false},ticks:{color:CHART.tick,font:{size:9},maxRotation:90,minRotation:90,autoSkip:false}},
+      y:{grid:{color:CHART.grid},ticks:{color:CHART.tick,font:{size:10},callback:v=>kShort(v)}}}}});
+}
+function shortMonth(lbl){const p=String(lbl).split(' ');return p[0].slice(0,3)+(p[1]?" '"+p[1].slice(2):'');}
+
+// ===========================================================================
 // Боковые графики
 // ===========================================================================
 function renderAging(){
@@ -865,6 +948,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){
 function exportCSV(){
   if(!MODEL)return;
   if(VIEW==='matrix'){ exportMatrixCSV(); return; }
+  if(VIEW==='leasing'){ exportLeasingCSV(); return; }
   const head=['ФИО','Авто','Накопл.баланс','Просрочка(мес)','Собираемость','Обязательство/мес',
     'Дней без оплаты','Статус','Посл.оплата'];
   const lines=[head.join(';')];
@@ -875,6 +959,15 @@ function exportCSV(){
       STATUS_LABEL[d.status],d.lastPaymentDate||''].join(';'));
   });
   downloadCSV(lines,'dolg_voditeli_');
+}
+function exportLeasingCSV(){
+  const D=MODEL.delta; if(!D){return;}
+  const head=['Месяц','Лизинг','Выручка обязательство','Дельта структурная','Выручка собрано','Дельта кассовая','Прогноз'];
+  const lines=[head.join(';')];
+  D.months.forEach(x=>lines.push([x.label,Math.round(x.leasing),Math.round(x.obligationRevenue),
+    Math.round(x.deltaObligation),Math.round(x.collectedRevenue),Math.round(x.deltaCollected),
+    x.projected?'да':'нет'].join(';')));
+  downloadCSV(lines,'lizing_delta_');
 }
 function exportMatrixCSV(){
   const months=monthsChrono();
@@ -946,11 +1039,25 @@ const DEMO=(()=>{
   drivers.forEach(d=>{net+=d.closedBalance;if(d.closedBalance<0){debtorsCount++;totalDebt+=-d.closedBalance;
     aging[d.agingBucket]+=-d.closedBalance;if(d.monthsOverdue>=2)over2+=-d.closedBalance;}});
   let co=0,cp=0;drivers.forEach(d=>{co+=Math.abs(d.currentObligation);cp+=d.currentPaid;});
+  // демо-лизинг + дельта (упрощённо)
+  const lm=[['Июнь 2026',2026,5,-642000],['Июль 2026',2026,6,-642000],['Август 2026',2026,7,-610000],
+    ['Сентябрь 2026',2026,8,-580000],['Декабрь 2026',2026,11,-540000],['Март 2027',2027,2,-470000],
+    ['Июнь 2027',2027,5,-470000],['Декабрь 2027',2027,11,-360000],['Июнь 2028',2028,5,-250000]];
+  const dm={};drivers.forEach(d=>d.monthly.forEach(e=>{const k=e.year*12+e.month;const a=dm[k]||(dm[k]={o:0,p:0,c:e.isCurrent});a.o+=Math.abs(e.obligation);a.p+=e.paid;}));
+  const cl=Object.values(dm).filter(a=>!a.c);
+  const rrO=Math.round(cl.reduce((s,a)=>s+a.o,0)/(cl.length||1)),rrP=Math.round(cl.reduce((s,a)=>s+a.p,0)/(cl.length||1));
+  let beO=null,beP=null;
+  const dMonths=lm.map(([l,y,mo,le])=>{const dO=rrO+le,dP=rrP+le;if(beO===null&&dO>=0)beO=l;if(beP===null&&dP>=0)beP=l;
+    return{label:l,year:y,month:mo,leasing:le,obligationRevenue:rrO,collectedRevenue:rrP,deltaObligation:dO,deltaCollected:dP,projected:true};});
+  const leasing={counterparties:['Европлан','ВТБ-лизинг','Флит'],months:lm.map(([l,y,mo,t])=>({label:l,year:y,month:mo,sortKey:y*12+mo,
+    total:t,byCounterparty:{'Европлан':Math.round(t*0.5),'ВТБ-лизинг':Math.round(t*0.3),'Флит':Math.round(t*0.2)}}))};
+  const delta={runRate:{obligation:rrO,collected:rrP},currentLeasing:lm[0][3],
+    currentDelta:{obligation:rrO+lm[0][3],collected:rrP+lm[0][3]},breakeven:{obligation:beO,collected:beP},months:dMonths};
   return {generatedAt:new Date().toISOString(),today:'2026-06-02',timezone:'Europe/Moscow',
     months,currentMonthLabel:'Июнь 2026',
     totals:{netBalance:net,totalDebt,debtorsCount,avgDebt:totalDebt/debtorsCount,
       collectionRateMonth:cp/co,debtOver2m:over2,aging},
-    drivers,buyoutByMonth:[]};
+    drivers,buyoutByMonth:[],leasing,delta};
 })();
 
 refresh();
