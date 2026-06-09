@@ -19,6 +19,7 @@ from googleapiclient.discovery import build
 SPREADSHEET_ID = os.environ.get('SPREADSHEET_ID', '1oTdRh6ZIDqU4IBoUZghRvGTdsIEBDtASYKD81PwGPrk')
 SHEET_GID = int(os.environ.get('SHEET_GID', '2080478081'))
 LEASING_GID = int(os.environ.get('LEASING_GID', '152169489'))  # лист «Платежи в лизинговую»
+LIST2_GID = int(os.environ.get('LIST2_GID', '59396243'))        # «Лист2» — реестр водителей с комментариями
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 _SHEETS_EPOCH = datetime(1899, 12, 30)
@@ -154,5 +155,28 @@ def fetch_leasing():
     resp = service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID, range=title,
         valueRenderOption='UNFORMATTED_VALUE',
+    ).execute()
+    return resp.get('values') or []
+
+
+def fetch_drivers_info():
+    """Строки «Лист2» (FORMATTED_VALUE — телефоны/комментарии как текст) или [].
+    Колонки: A=ФИО, B=телефон, C=паспорт, D=адрес, E=марка, F=гос.номер,
+    G=сумма долга 2026, H=комментарии."""
+    service = _service()
+    meta = service.spreadsheets().get(
+        spreadsheetId=SPREADSHEET_ID,
+        fields='sheets.properties(sheetId,title)',
+    ).execute()
+    title = None
+    for s in meta.get('sheets') or []:
+        if (s.get('properties') or {}).get('sheetId') == LIST2_GID:
+            title = s['properties'].get('title')
+            break
+    if not title:
+        return []
+    resp = service.spreadsheets().values().get(
+        spreadsheetId=SPREADSHEET_ID, range=title,
+        valueRenderOption='FORMATTED_VALUE',
     ).execute()
     return resp.get('values') or []
