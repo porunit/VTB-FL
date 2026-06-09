@@ -128,6 +128,11 @@
   .chip.warn{background:var(--red-bg);color:var(--red-ink);border-color:#e6b8b2}
   .chip.ok{background:var(--green-bg);color:var(--green-ink);border-color:#bcdcc3}
   .chip.cur{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+  .pchip{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:6px 11px;font-size:12px;font-family:inherit;cursor:pointer;color:var(--ink-2);font-weight:550}
+  .pchip:hover{background:var(--head)}
+  .pchip.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent);font-weight:700}
+  .pchip b{font-variant-numeric:tabular-nums}
 
   /* collection mini-bar */
   .collbar{display:inline-grid;grid-template-columns:1fr auto;gap:7px;align-items:center;min-width:106px}
@@ -259,6 +264,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>Водители</button>
       <button data-v="leasing">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Лизинг и дельта</button>
+      <button data-v="plan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>План сбора</button>
     </div>
     <div class="controls" id="controls" style="display:none">
       <input id="qName" placeholder="Поиск по ФИО…">
@@ -364,6 +371,9 @@ const CHART = {tick:'#5c6671',grid:'#e3e6ea',label:'#3a4149',bar:'#c0392b',barMu
 let MODEL=null, VIEW='dynamics';
 let sortBy='closedBalance', sortDir=1;       // таблица водителей
 let mxSortMonth=null, mxSortDir=1;           // матрица (null = по накопл. балансу)
+let planSeg='work';                          // фильтр сегмента в плане сбора
+const SEG={problem:{label:'Проблемный',color:'#c0392b'},schedule:{label:'На графике',color:'#1f5fb0'},
+  cant:{label:'Не могут',color:'#9a6a00'},ok:{label:'Исправный',color:'#1e7d34'}};
 let agingChart=null, collChart=null, mChart=null, dynChart=null, monthChart=null, leasingChart=null;
 if(typeof Chart!=='undefined'){Chart.defaults.animation=false;Chart.defaults.font.family='Inter,system-ui,sans-serif';}
 
@@ -486,11 +496,12 @@ function renderKPIs(){
 
 // ---- Переключатель вкладок ----
 function renderMain(){
-  const showControls=(VIEW==='matrix'||VIEW==='drivers');
+  const showControls=(VIEW==='matrix'||VIEW==='drivers'||VIEW==='plan');
   document.getElementById('controls').style.display=showControls?'flex':'none';
   if(VIEW==='dynamics') renderDynamics();
   else if(VIEW==='matrix') renderMatrix();
   else if(VIEW==='leasing') renderLeasing();
+  else if(VIEW==='plan') renderPlan();
   else renderDrivers();
 }
 
@@ -806,6 +817,78 @@ function renderLeasing(){
 function shortMonth(lbl){const p=String(lbl).split(' ');return p[0].slice(0,3)+(p[1]?" '"+p[1].slice(2):'');}
 
 // ===========================================================================
+// ВКЛАДКА — План сбора (для Службы безопасности) + ежедневный план-факт
+// ===========================================================================
+const PLAN_FILTERS=[{k:'work',label:'В работу СБ'},{k:'all',label:'Все'},
+  {k:'cant',label:'Не могут'},{k:'ok',label:'Исправные'},{k:'short',label:'Ёмкость < плана'}];
+function planRowsFiltered(){
+  const cp=MODEL.collectionPlan; let rows=cp.rows.slice();
+  if(planSeg==='work') rows=rows.filter(r=>r.segment==='problem'||r.segment==='schedule');
+  else if(planSeg==='short') rows=rows.filter(r=>r.capacityShort);
+  else if(planSeg!=='all') rows=rows.filter(r=>r.segment===planSeg);
+  const qn=(document.getElementById('qName')?.value||'').trim().toLowerCase();
+  const qc=(document.getElementById('qCar')?.value||'').trim().toLowerCase();
+  return rows.filter(r=>(!qn||r.name.toLowerCase().includes(qn))&&(!qc||(r.plate||'').toLowerCase().includes(qc)));
+}
+function renderPlan(){
+  const p=document.getElementById('mainPanel'), cp=MODEL.collectionPlan;
+  if(!cp){ p.innerHTML=`<h2>План сбора</h2><div class="empty">Реестр водителей (Лист2) недоступен.</div>`; return; }
+  const s=cp.summary, lag=s.planMTDTotal-s.factMTDTotal, prog=s.planMTDTotal?Math.round(s.factMTDTotal/s.planMTDTotal*100):0;
+  const kpi=`
+    <div class="kpis" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none">
+      <div class="kpi"><div class="lbl">План сбора / мес</div><div class="val num">${moneyAbs(s.planTotal)}</div><div class="sub">${s.monthLabel} · текущий + взнос по долгу</div></div>
+      <div class="kpi"><div class="lbl">План на сегодня (MTD)</div><div class="val num">${moneyAbs(s.planMTDTotal)}</div><div class="sub">${s.daysElapsed}/${s.daysInMonth} дн</div></div>
+      <div class="kpi"><div class="lbl">Факт (MTD)</div><div class="val num" style="color:${prog>=90?'var(--green)':prog>=60?'var(--yellow)':'var(--debt)'}">${moneyAbs(s.factMTDTotal)}</div><div class="sub">${prog}% от плана</div></div>
+      <div class="kpi"><div class="lbl">Отставание</div><div class="val num ${lag>0?'bal-neg':'bal-pos'}">${money(-lag)}</div><div class="sub">план MTD − факт</div></div>
+      <div class="kpi"><div class="lbl">В работу СБ</div><div class="val num">${s.workCount}</div><div class="sub">проблемные + на графике</div></div>
+      <div class="kpi"><div class="lbl">Ёмкость &lt; плана</div><div class="val num" style="color:var(--debt)">${s.capacityShortCount}</div><div class="sub">нужна реструктуризация</div></div>
+    </div>`;
+  const chips=PLAN_FILTERS.map(f=>{
+    const n=f.k==='work'?(s.segments.problem+s.segments.schedule):f.k==='all'?cp.rows.length:f.k==='short'?s.capacityShortCount:(s.segments[f.k]||0);
+    return `<button class="pchip${planSeg===f.k?' on':''}" data-seg="${f.k}">${f.label} <b>${n}</b></button>`;
+  }).join('');
+  p.innerHTML=`
+    <h2>План сбора <span class="hint">${s.monthLabel} · план-факт нарастающим итогом · клик по строке — карточка водителя</span></h2>
+    ${kpi}
+    <div style="padding:11px 14px;display:flex;gap:7px;flex-wrap:wrap;border-bottom:1px solid var(--line)">${chips}</div>
+    <div class="tbl-scroll" style="max-height:calc(100vh - 360px)">
+      <table class="dt">
+        <thead><tr>
+          <th class="nos">Водитель / тел.</th><th class="nos">Авто</th><th class="nos">Сегмент</th>
+          <th class="nos">Тек. платёж</th><th class="nos">Долг</th><th class="nos">Ёмкость</th>
+          <th class="nos">План / мес</th><th class="nos">Факт MTD</th><th class="nos">План MTD</th><th class="nos">Откл.</th>
+          <th class="nos">Комментарий</th>
+        </tr></thead>
+        <tbody id="planBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="planEmpty" style="display:none">Нет водителей в этом сегменте</div>`;
+  const rows=planRowsFiltered();
+  document.getElementById('planEmpty').style.display=rows.length?'none':'block';
+  document.getElementById('planBody').innerHTML=rows.map(r=>{
+    const sg=SEG[r.segment]||{label:r.segment,color:'var(--muted)'};
+    const segChip=`<span class="chip" style="background:${sg.color}1f;color:${sg.color};border-color:${sg.color}55">${sg.label}</span>`;
+    const planCell=`${moneyAbs(r.plan)}${r.capacityShort?' <span class="chip warn" title="Ёмкость ниже плана — нереально дожать, нужна реструктуризация">!</span>':''}`;
+    const basisHint=r.arrangement?` <span class="cur-pill" title="Договорённость из комментария">📌</span>`:'';
+    return `<tr data-key="${esc(r.key)}">
+      <td><div class="name">${esc(r.name)}</div><div class="car">${esc(r.phone||'—')}</div></td>
+      <td class="num muted-cell">${esc(r.plate||'—')}</td>
+      <td>${segChip}</td>
+      <td class="num">${moneyAbs(r.currentPayment)}</td>
+      <td class="num ${r.debt>0?'bal-neg':''}">${r.debt>0?moneyAbs(r.debt):'—'}</td>
+      <td class="num ${r.capacityShort?'bal-neg':''}">${moneyAbs(r.capacity)}</td>
+      <td class="num" style="font-weight:700">${planCell}${basisHint}</td>
+      <td class="num">${moneyAbs(r.factMTD)}</td>
+      <td class="num muted-cell">${moneyAbs(r.planMTD)}</td>
+      <td class="num ${r.gap<-0.5?'bal-neg':'bal-pos'}">${money(r.gap)}</td>
+      <td style="white-space:normal;max-width:340px;font-size:11.5px;color:var(--ink-2)">${esc(r.comment||'')}</td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('#planBody tr').forEach(tr=>tr.onclick=()=>openDrill(tr.dataset.key));
+  p.querySelectorAll('.pchip').forEach(b=>b.onclick=()=>{planSeg=b.dataset.seg;renderPlan();});
+}
+
+// ===========================================================================
 // Боковые графики
 // ===========================================================================
 function renderAging(){
@@ -952,6 +1035,7 @@ function exportCSV(){
   if(!MODEL)return;
   if(VIEW==='matrix'){ exportMatrixCSV(); return; }
   if(VIEW==='leasing'){ exportLeasingCSV(); return; }
+  if(VIEW==='plan'){ exportPlanCSV(); return; }
   const head=['ФИО','Авто','Накопл.баланс','Просрочка(мес)','Собираемость','Обязательство/мес',
     'Дней без оплаты','Статус','Посл.оплата'];
   const lines=[head.join(';')];
@@ -962,6 +1046,18 @@ function exportCSV(){
       STATUS_LABEL[d.status],d.lastPaymentDate||''].join(';'));
   });
   downloadCSV(lines,'dolg_voditeli_');
+}
+function exportPlanCSV(){
+  const cp=MODEL.collectionPlan; if(!cp){return;}
+  const head=['Водитель','Телефон','Авто','Сегмент','Тек.платёж','Долг','Ёмкость','План/мес','Основание','Факт MTD','План MTD','Отклонение','Ёмкость<плана','Комментарий'];
+  const lines=[head.join(';')];
+  planRowsFiltered().forEach(r=>lines.push([
+    '"'+r.name.replace(/"/g,'""')+'"','"'+(r.phone||'')+'"','"'+(r.plate||'')+'"',
+    (SEG[r.segment]||{}).label||r.segment,Math.round(r.currentPayment),Math.round(r.debt),
+    Math.round(r.capacity),Math.round(r.plan),r.planBasis,Math.round(r.factMTD),Math.round(r.planMTD),
+    Math.round(r.gap),r.capacityShort?'да':'',
+    '"'+(r.comment||'').replace(/"/g,'""').replace(/\r?\n/g,' ')+'"'].join(';')));
+  downloadCSV(lines,'plan_sbora_');
 }
 function exportLeasingCSV(){
   const D=MODEL.delta; if(!D){return;}
@@ -1056,11 +1152,34 @@ const DEMO=(()=>{
     total:t,byCounterparty:{'Европлан':Math.round(t*0.5),'ВТБ-лизинг':Math.round(t*0.3),'Флит':Math.round(t*0.2)}}))};
   const delta={runRate:{obligation:rrO,collected:rrP},currentLeasing:lm[0][3],
     currentDelta:{obligation:rrO+lm[0][3],collected:rrP+lm[0][3]},breakeven:{obligation:beO,collected:beP},months:dMonths};
+  // демо-план сбора
+  const segByStatus={red:'problem',yellow:'schedule',green:'ok'};
+  const demoComments={'исмаилов руслан':'Машина под выкуп, передан в СБ. На связь выходит редко.',
+    'хан форсажевич':'Машина была в аренде, стоит в СТО по коробке. Требуется встреча с СБ.',
+    'петров сергей':'Аренда. Договорённость на еженедельную оплату по 12к.',
+    'газиев тимур':'Платит исправно','сидоров антон':'Выкуп. Не на связи, график не соблюдает.',
+    'алиев мурад':'Платит исправно'};
+  const pl=drivers.map(d=>{const closedm=d.monthly.filter(e=>!e.isCurrent);
+    const cap=Math.round(closedm.reduce((s,e)=>s+e.paid,0)/(closedm.length||1));
+    const current=Math.abs(d.currentObligation),debt=d.closedBalance<0?-d.closedBalance:0;
+    const plan=Math.round(current+Math.min(Math.max(0,cap-current),debt));
+    const cm=demoComments[d.key]||'',seg=/сто|ремонт|авари/i.test(cm)?'cant':(segByStatus[d.status]||'schedule');
+    const planMTD=Math.round(plan*2/30);
+    return {key:d.key,name:d.name,phone:'8XXXXXXXXXX',plate:d.car,comment:cm,segment:debt>0||seg!=='ok'?seg:'ok',
+      capacity:cap,currentPayment:current,debt,plan,planBasis:'формула (по ёмкости)',arrangement:null,
+      capacityShort:cap>0&&plan>cap*1.05,factMTD:d.currentPaid,planMTD,gap:d.currentPaid-planMTD};});
+  const so={problem:0,schedule:1,cant:2,ok:3};pl.sort((a,b)=>(so[a.segment]-so[b.segment])||(a.gap-b.gap));
+  const collectionPlan={rows:pl,summary:{monthLabel:'Июнь 2026',daysElapsed:2,daysInMonth:30,
+    planTotal:pl.reduce((s,r)=>s+r.plan,0),planMTDTotal:pl.reduce((s,r)=>s+r.planMTD,0),
+    factMTDTotal:pl.reduce((s,r)=>s+r.factMTD,0),workCount:pl.filter(r=>r.segment==='problem'||r.segment==='schedule').length,
+    capacityShortCount:pl.filter(r=>r.capacityShort).length,
+    segments:{problem:pl.filter(r=>r.segment==='problem').length,schedule:pl.filter(r=>r.segment==='schedule').length,
+      cant:pl.filter(r=>r.segment==='cant').length,ok:pl.filter(r=>r.segment==='ok').length}}};
   return {generatedAt:new Date().toISOString(),today:'2026-06-02',timezone:'Europe/Moscow',
     months,currentMonthLabel:'Июнь 2026',
     totals:{netBalance:net,totalDebt,debtorsCount,avgDebt:totalDebt/debtorsCount,
       collectionRateMonth:cp/co,debtOver2m:over2,aging},
-    drivers,buyoutByMonth:[],leasing,delta};
+    drivers,buyoutByMonth:[],leasing,delta,collectionPlan};
 })();
 
 refresh();

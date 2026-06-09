@@ -65,7 +65,12 @@ def get_model():
             leasing_rows = sheet.fetch_leasing()
         except Exception:  # noqa: BLE001 — лизинг необязателен, не валим модель
             leasing_rows = None
-        data = model_parser.build_model(rows, formulas, tz, leasing_rows=leasing_rows)
+        try:
+            directory_rows = sheet.fetch_drivers_info()
+        except Exception:  # noqa: BLE001 — реестр/план необязателен
+            directory_rows = None
+        data = model_parser.build_model(rows, formulas, tz,
+                                        leasing_rows=leasing_rows, directory_rows=directory_rows)
     except Exception as err:  # noqa: BLE001
         import traceback
         return {'error': str(err), 'stack': traceback.format_exc()}

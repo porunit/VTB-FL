@@ -258,7 +258,131 @@ def build_delta(model, leasing):
     }
 
 
-def build_model(rows, formulas, tz='Europe/Moscow', leasing_rows=None):
+# ---------------------------------------------------------------------------
+# План сбора денег (для Службы безопасности) + сегментация
+# ---------------------------------------------------------------------------
+
+def build_directory(rows):
+    """«Лист2» → {name_key: {name, phone, address, brand, plate, comment}}."""
+    out = {}
+    if not rows:
+        return out
+    for r in range(1, len(rows)):
+        row = rows[r]
+        name = row[0] if len(row) > 0 else ''
+        if not name or not clean_name(name):
+            continue
+        def g(i):
+            return clean_name(row[i]) if len(row) > i and row[i] is not None else ''
+        out[name_key(name)] = {'name': clean_name(name), 'phone': g(1), 'address': g(3),
+                               'brand': g(4), 'plate': g(5), 'comment': g(7)}
+    return out
+
+
+def extract_arrangement(comment):
+    """Из текста комментария → ориентировочный МЕСЯЧНЫЙ план (₽) или None.
+    Понимает: 'по 5к в день', 'еженедельно 25к', 'не менее 120к'. Эвристика —
+    значение приблизительное, всегда показываем исходный комментарий рядом."""
+    if not comment:
+        return None
+    c = comment.lower().replace(' ', ' ').replace('ё', 'е')
+
+    def to_rub(num, suf):
+        v = float(num.replace(' ', '').replace(',', '.'))
+        if suf and ('к' in suf or 'k' in suf or 'тыс' in suf):
+            v *= 1000
+        return v
+
+    pat_amt = r'(\d[\d ]*[.,]?\d*)\s*(к|k|тыс[а-я]*)?'
+    # в день / в сутки / ежедневно → ×26 рабочих дней
+    for rx in (pat_amt + r'\s*(?:руб[а-я]*\s*)?(?:в\s*день|/\s*день|в\s*сутки)',
+               r'ежедневн[а-я]*\D{0,8}?' + pat_amt):
+        m = re.search(rx, c)
+        if m:
+            return round(to_rub(m.group(1), m.group(2)) * 26)
+    # в неделю / еженедельно → ×4.33
+    for rx in (r'(?:еженедельн[а-я]*|в\s*неделю|/\s*нед[а-я]*)\D{0,12}?' + pat_amt,
+               pat_amt + r'\s*(?:в\s*неделю|/\s*нед[а-я]*)'):
+        m = re.search(rx, c)
+        if m:
+            return round(to_rub(m.group(1), m.group(2)) * 4.33)
+    # «не менее / минимум N (в месяц)»
+    m = re.search(r'(?:не\s*менее|минимум|не\s*ниже)\D{0,6}?' + pat_amt, c)
+    if m:
+        return round(to_rub(m.group(1), m.group(2)))
+    return None
+
+
+def segment_driver(comment, closed_balance):
+    """Сегмент водителя: problem / cant / schedule / ok."""
+    c = (comment or '').lower().replace('ё', 'е')
+    has_debt = closed_balance < -0.5
+    paying = any(w in c for w in ['платит исправно', 'исправно платит', 'вопросов по оплат',
+                                  'почти не возника', 'без видимых'])
+    problem = any(w in c for w in ['передан в сб', 'на связь не выходит', 'не выходит на связь',
+                                   'не соблюда', 'без видимого движени', 'забухив'])
+    down = any(w in c for w in ['стоит на ремонте', 'в ремонте', 'на ремонте', 'в сто', 'изъят',
+                                'не на ходу', 'ошибка по коробке', 'уволил'])
+    if problem:
+        return 'problem'
+    if down:
+        return 'cant'
+    if paying and not has_debt:
+        return 'ok'
+    if has_debt:
+        return 'schedule'
+    return 'ok'
+
+
+def build_collection_plan(model, directory):
+    """План сбора по каждому водителю + факт MTD + отклонение. Гибрид: договорённость
+    из комментария, иначе формула (текущий платёж + взнос по ёмкости)."""
+    cur = next((m for m in model['months'] if m['isCurrent']), None)
+    elapsed = cur['daysElapsed'] if cur else 0
+    dim = cur['daysInMonth'] if cur else 30
+    seg_order = {'problem': 0, 'schedule': 1, 'cant': 2, 'ok': 3}
+    out = []
+    for d in model['drivers']:
+        info = directory.get(d['key'], {})
+        comment = info.get('comment', '')
+        closed = [e for e in d['monthly'] if not e['isCurrent']]
+        capacity = round2(sum(e['paid'] for e in closed) / len(closed)) if closed else 0.0
+        current = round2(abs(d['currentObligation']))
+        debt = round2(-d['closedBalance']) if d['closedBalance'] < 0 else 0.0
+        arr = extract_arrangement(comment)
+        if arr:
+            plan, basis = round2(arr), 'договорённость'
+        else:
+            installment = min(max(0.0, capacity - current), debt)  # по ёмкости, не больше долга
+            plan, basis = round2(current + installment), 'формула (по ёмкости)'
+        seg = segment_driver(comment, d['closedBalance'])
+        fact_mtd = round2(d['currentPaid'])
+        plan_mtd = round2(plan * (elapsed / dim)) if dim else 0.0
+        cap_short = capacity > 0 and plan > capacity * 1.05  # ёмкость ниже плана → нереально
+        out.append({
+            'key': d['key'], 'name': d['name'], 'phone': info.get('phone', ''),
+            'plate': info.get('plate', d.get('car', '')), 'comment': comment,
+            'segment': seg, 'capacity': capacity, 'currentPayment': current,
+            'debt': debt, 'plan': plan, 'planBasis': basis, 'arrangement': arr,
+            'capacityShort': cap_short,
+            'factMTD': fact_mtd, 'planMTD': plan_mtd, 'gap': round2(fact_mtd - plan_mtd),
+        })
+    out.sort(key=lambda r: (seg_order.get(r['segment'], 9), r['gap']))
+    work = [r for r in out if r['segment'] in ('problem', 'schedule')]
+    summary = {
+        'monthLabel': cur['label'] if cur else '', 'daysElapsed': elapsed, 'daysInMonth': dim,
+        'planTotal': round2(sum(r['plan'] for r in out)),
+        'planMTDTotal': round2(sum(r['planMTD'] for r in out)),
+        'factMTDTotal': round2(sum(r['factMTD'] for r in out)),
+        'workCount': len(work),
+        'capacityShortCount': sum(1 for r in out if r['capacityShort']),
+        'segments': {s: sum(1 for r in out if r['segment'] == s)
+                     for s in ('problem', 'schedule', 'cant', 'ok')},
+    }
+    return {'rows': out, 'summary': summary}
+
+
+def build_model(rows, formulas, tz='Europe/Moscow', leasing_rows=None, directory_rows=None):
     now = datetime.now(_tzinfo(tz))
     today = {'y': now.year, 'm': now.month - 1, 'd': now.day}
     today_ms = int(datetime(today['y'], today['m'] + 1, today['d'],
@@ -434,6 +558,11 @@ def build_model(rows, formulas, tz='Europe/Moscow', leasing_rows=None):
         if leasing:
             model['leasing'] = leasing
             model['delta'] = build_delta(model, leasing)
+    if directory_rows:
+        directory = build_directory(directory_rows)
+        if directory:
+            model['directory'] = directory
+            model['collectionPlan'] = build_collection_plan(model, directory)
     return model
 
 
